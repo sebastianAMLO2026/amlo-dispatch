@@ -1,0 +1,1264 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body><title>AMLO Dispatch</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: a dispatcher's work surface — one column of stacked panels (files → routes → extras → notes), sticky action bar at the bottom. */
+:root{
+  --bg:#f3f4f7; --panel:#ffffff; --ink:#151a2c; --muted:#5b6278; --line:#dcdfe8;
+  --navy:#1f2a6b; --band:#131921; --band-ink:#ffffff; --accent:#ee7d1f; --accent-ink:#ffffff;
+  --soft:#eef0f6; --ok:#1d7a46; --warn:#b5600a; --bad:#c00000; --field:#ffffff; --hl:#fff4e8;
+  --display:"Archivo","Arial Narrow",Arial,sans-serif;
+  --body:"Public Sans","Segoe UI",Roboto,Arial,sans-serif;
+  --mono:"JetBrains Mono",Consolas,"Courier New",monospace;
+  --r:8px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1220; --panel:#171b2c; --ink:#e8eaf3; --muted:#a2a8bf; --line:#2c3250;
+  --navy:#9fb0ff; --band:#0a0d18; --band-ink:#ffffff; --accent:#ff9a45; --accent-ink:#1a1206;
+  --soft:#1f2438; --ok:#5fd394; --warn:#ffb15c; --bad:#ff6b6b; --field:#10142a; --hl:#2a2214; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1220; --panel:#171b2c; --ink:#e8eaf3; --muted:#a2a8bf; --line:#2c3250;
+  --navy:#9fb0ff; --band:#0a0d18; --band-ink:#ffffff; --accent:#ff9a45; --accent-ink:#1a1206;
+  --soft:#1f2438; --ok:#5fd394; --warn:#ffb15c; --bad:#ff6b6b; --field:#10142a; --hl:#2a2214; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{background:var(--bg);color:var(--ink)}
+body{font-family:var(--body);font-size:14px;line-height:1.45;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+.wrap{max-width:1060px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;letter-spacing:.01em}
+h2{font-size:18px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
+.topbar{display:flex;align-items:center;gap:14px;padding-block:18px 4px;flex-wrap:wrap}
+.logo{height:46px;width:auto;border-radius:6px;background:#fff;padding:4px 6px}
+.topbar h1{font-size:26px;font-weight:800}
+.topbar .sub{color:var(--muted);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:600;color:var(--muted)}
+.chip b{color:var(--ink);font-family:var(--mono)}
+.chip.bad{border-color:var(--bad);color:var(--bad)}
+.chip.ok b{color:var(--ok)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.panel-head p{margin:0;color:var(--muted);font-size:13px;max-width:62ch}
+.step{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.06em}
+.files{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:6px;cursor:pointer;background:var(--soft);min-width:0}
+.drop:hover,.drop.over{border-color:var(--accent)}
+.drop:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.drop .t{font-weight:700}
+.drop .h{font-size:12px;color:var(--muted)}
+.drop .f{font-family:var(--mono);font-size:12px;color:var(--ok);word-break:break-all}
+.drop .f.err{color:var(--bad)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}
+label.fld{display:flex;flex-direction:column;gap:4px;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+input[type=text],input[type=date],input[type=number],select,textarea{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+textarea{width:100%;resize:vertical;min-height:52px}
+button{font:inherit;font-weight:700;border-radius:6px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.small{padding:5px 10px;font-size:12px}
+button.link{border:none;background:none;color:var(--navy);padding:0;text-decoration:underline;font-weight:600}
+button:disabled{opacity:.45;cursor:not-allowed}
+.msg{padding:10px 12px;border-radius:6px;background:var(--hl);border:1px solid var(--line);font-size:13px}
+.msg.bad{border-color:var(--bad);color:var(--bad)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:7px 8px;background:var(--soft);border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:4px 8px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+tr.wave td{background:var(--band);color:var(--band-ink);font-family:var(--display);font-weight:700;letter-spacing:.03em;padding:6px 10px}
+td.code{font-family:var(--mono);font-weight:700}
+td select{width:150px}
+td input.drv{width:220px}
+td input.num{width:56px}
+td input.sm{width:96px}
+.tag{font-size:10px;font-weight:800;letter-spacing:.06em;padding:2px 6px;border-radius:4px}
+.tag.forced{color:var(--warn);border:1px solid var(--warn)}
+.tag.novan{color:var(--bad);border:1px solid var(--bad)}
+.tag.manual{color:var(--navy);border:1px solid var(--navy)}
+.type{font-size:11px;font-weight:700;color:var(--muted)}
+.ret{font-family:var(--mono);font-size:12px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-weight:600}
+.yn{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.yn button{border:none;border-radius:0;padding:7px 18px}
+.yn button[aria-pressed=true]{background:var(--navy);color:var(--panel)}
+.extras{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+.extras label{display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:12px;color:var(--muted)}
+.extras input{flex:1}
+.notes{display:grid;grid-template-columns:minmax(150px,240px) 1fr;gap:10px 14px;align-items:start}
+.notes .lab{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding-top:8px}
+@media (max-width:560px){.notes{grid-template-columns:1fr}.notes .lab{padding-top:0}}
+.checks{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.checks li.bad{color:var(--bad)} .checks li.warn{color:var(--warn)} .checks li.ok{color:var(--ok)}
+.actions{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--line);padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));z-index:5}
+.actions .in{max-width:1060px;margin:0 auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.actions .stat{flex:1;min-width:0;font-size:13px;color:var(--muted)}
+.example{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--accent-ink);background:var(--accent);padding:2px 8px;border-radius:4px}
+.muted{color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<div class="wrap">
+  <header class="topbar">
+    <img class="logo" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCACwAWgDASIAAhEBAxEB/8QAHQABAAICAwEBAAAAAAAAAAAAAAcIBQYBBAkDAv/EAFMQAAEDAwEEAgwEEgkFAQEAAAEAAgMEBQYRBwgSITFBExQiMjdRYXF1gZGzQnShshUWFxgjNTZSVmJyc4KTlLHC0TM0VFWSorTB0zhTZYTSQ5X/xAAbAQEAAgMBAQAAAAAAAAAAAAAAAgMBBAUGB//EADYRAAICAQIDBgMIAgEFAAAAAAABAgMRBAUSITETMkFRYXEGNJEiM1KBobHB0RRCJENygvDx/9oADAMBAAIRAxEAPwC3yIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiLkDU6IDhFD133jdnVuulVb3C81DqaV0TpIKRpY4tOh4SXgkajp0XV+ua2c/2bIP2Nn/ACLaWi1D58DIdpHzJrRQp9c1s5/s2QfsbP8AkW07NtsOH59epbPZDcIq2OEzhlXAGcbQQDwkOOpGo5KM9JfBcUovAU4vkmSEiItcmEWs7SM3seA4+29X41JgfO2CNlPHxve8gnQAkDoBPMqOPrm9nn9iyD9kj/5FfXprrFxQi2iLnFcmybUUSYvvCYDkGQUVlgZdqWetlEMUlTTtbHxnk0Eh501PLo61LihZTOp4msGVJPocIiKsyEREARa/tBzGy4Njcl+vskzaZsjYmshZxSSPd0NaNR4ienoCjL65vZ5/Ysg/ZI/+RX16a21ZhFtEXOK6sm1FEWObw+A3y/UNmp4bzBPWztgifNStDA9x0bqQ8kAnQdCkTNsns2HY7UX6/VDoKKAhpLWFznuJ0DWgdJKxPT2wkoyjzYUk1lMzKKFvrmNm/wD2r7+xN/8AtZHG94LZ3fb5SWiGa50s9XIIon1NKGx8ZOjQSHHTU8vEpvR3pZcGY7SPmSwi5XC1iYREQBERAEWEynL8XxaLsmQ36gtuo1DJpRxu8zB3R9QUeV+8bswpZCyKtudZp8KChdwn/EWq6vT22c4xbIuUV1ZLyKGI95bZs52jhfGDxmiH+z1tGN7Ztmt/lZDSZRTU87+TYq1rqck+LV4A+VSlpL4rLg/oFOL8Tf0XDHNexsjHNexw1a5p1BHjBXK1yQREQBERAEREAREQBERAEREAWD2g3luO4NfL45wBoqGWVn5fCQ0f4iFnFDm9zc6iDZjDYqGOSasvdwipo4Ymlz5Gt7sgAczza0etXaevtLYx82Rk8JsqPh+P3PLMkprLbjGaqpLnOkmdwsY1oLnvceoAAkqfNmWzS2WW0y2PLbdZa+uu1ZLG2bsjZS2lbF9jfE/4Bc8kjoJ0Gq+GH4tR7P7Q6m4BLk1bTcFyqC8OFI13M08enLXo43eocl2OS898TfG7qvem0fNJrL6c08tL08D1Gy/C/bVK/UPGc4Xo1yb/AHIMyLBswx6mfVXrGrrQ0rHcJnlpz2Mc+Wrhy5rM7AL59L+2DHa17+CKWqFLKdeXBKCzn63A+pTFkjqu47KsktFnj4LmaUSykuc81NMxwdLG1pOjXAAO1A5hpCrLBLJBNHUQuLZI3B7HDqIOoPtXtti3Zb3oe2aSzlNJ5x75SPNbpoHt2pdLbePHGM/qz0xPI6LhYzErtHfsWtV7iILK6jiqOXjc0Ej26rJritNPDMEF763gwtnpdnupFUBW/wB9bwYWz0uz3UiqAvT7V8uvdmnd3z9RSSRSslieWSMcHMcDzaQdQR616DbI8rjzXZ7acgDmmeaHsdU0fBnZ3Lx7Rr5iF57qxG5bl3al+uOGVUukVeztujBPRMwaPaPOzn+gsbpR2lPEusRTLEsFq0RF5g3AiLqXu5Utms1bd654ZS0UD55XH71oJP7llLLwgVX30cr7fyu34jTSawWuLtipAPIzyDkD5maf4yq/rJZTearIskuN9riTUV9S+d/k4jqB5gNB6ljV7LTUqmqMPI585cUsmxbMvCRjPpam961Wt3yPA670pT/xqqWzLwkYz6WpvetVrd8jwOu9KU/8a5+s+bqLa+5Ipgsthn3Y2T0jT+9asSsthn3Y2T0jT+9aupPuspR6Pv78+dflfp/fnzr8rxB0QiLlAfGsqaejpJqurnjp6eFhkllkcGtY0cyST0BVY2x7xdwrp5rPgL3UVE0lj7m5v2ab82D3jfL3x8i629htPmvN6lway1Jba6B+le9jv6zOPgeVrD1dbtfEFAK7+37dHhVlqy/BGrba84R9aypqKyqkqqyolqaiQ6vlleXvcfGSeZXyRZay4zkd7Zx2ewXS4MHw6alfI32gaLstqK5lHUxKHn0rZajZ/nVPE6WbDr8xjeZcaCTl8i1yWOSKV0Usb45GnRzHtIc0+UHoSM4y6PIaaN22abU8vwKpYLVcHVFv4tZLfUuL4HDr0HSw+VunrVx9k+0iwbRbKay1vNPWwAdt0Mrh2SEnr/Gaepw9eh5KgCzWE5PdsPyWkv8AZZzFVU7ubSe5lZ8Jjh1tI5fKtHWaCF6zHlL/AN6lldrj16HoyiweBZPb8yxKgyK2H7BVx6ujJ1dE8cnsPlB1Hy9azi8tKLi2n1N1PIREWAEREAREQBERAEREAUG7Yc+slj2wUVsu1fJQsp7FK2GsZEZO1qieRvdEN5j7HHpqOY4lOYGp0Xn/ALcr59MO1rI7k1/HF246CE6/Ai+xj5uvrW9oNJHVSlCfTDXL15EJ2upqUeqZI912kbO7dUmnhbfb69o1fU0xZBC9x6Q0SDj08pHNZjZblTNod9u1ituLUlut9Na5apsz5XTVXZWubwEv5DQ6kcIAHNVsVo9x6z8FryS/PZ/TTRUcZ8jQXu+c1V6j4W2nSaWfBSstYy+b58vHxN1b7r7bYuVj5POOi/Q+VqrZrdcYK6DTskLw4A9Dh1tPkI1B86hbbNi8OM5pKLewi0XJgrrceoRPJ1j87HcTfUFOGSUf0PyC4UWmghqHtHm15fJosNmVhOY4FUWmFnHd7UX11sA76Run2aEecAOA8bfKvn3wPuz23cJaS54jN49pLp9eh7H4o0C1mjjqq1zis/8Ai/66/UkvdIvf0W2O0tG9/FLaqmWkcNeYbrxs+R+nqUuKq+5De+w3+/47I/RtVTMq4mn76N3C75Hj2K1C+h6+vs9RJfn9TwFTzFEF763gwtnpdnupFUBW/wB9bwYWz0uz3UiqAu5tXy692a93fCyeK3qrxzJLdfqBxFTQVDJ2fjaHm3zEaj1rGIui0msMqPSawXSkvljobzQPD6WtgZPEfxXDXTzjo9S7qgLcyy/6JYlW4jVS61Fpk7NTAnmYJDzA/Jfr/iCn1eN1FLptcPI34S4lkKDN8fK/oRgVNjVPJw1N6m+ygHmKeMgu9ruEe1ToOZ0VEd43LPpt2rXOohl46GgPaNJoeRbGSHOHnfxH2LZ2yntb030XP+iF0sRI5REXqjSNi2ZeEjGfS1N71qtbvkeB13pSn/jVUtmXhIxn0tTe9arW75Hgdd6Up/41yNZ83UX19yRTBZbDPuxsnpGn961YlZbDPuxsnpGn961dSfdZSj0ff3586/K/T+/PnX5XiDohattbyY4fs5vWQMIE9PTltNr1zPPAz/MQfUtpUG76dZJBsvt9Iw6NqrqwP8obG9379Ffpa1ZdGL8WRm8RbKgSPfLI6WV7nyPcXPc46lxPMkr8os3gNojv2cWOyy/0VbXwwSfkueOL5NV7GTUVlmguZP27hsQoKy1U2Y5nSCpFQBJb7dIO44OqWQfC16Q3o05nXVWYgjjghZBBGyGJg0ZHG0Na0eIAcguY444o2xRMDI2NDWNA0DQOQA9S5XjtRqJ3z4pM34QUVhHOp8ZWlbT9mWL5/bZIrrRsguAaRBcYWATRO6tT8Nv4p+TpW6IqoTlCXFF4ZlpPkzzozrF7phuU1uPXdgbU0ruT297Kw82vb5COfydSwas7vwWWAU2OZGxgbOZJKKVwHNzdONmvm0f7VWJev0l/b0qb6mjOPDLBYzcoymSG9XbDqiQmGqi7dpWk97IzRrwPO0g/oq06odu41j6LbZjL2HTstS6B3lD2Ob/ur4rg7tWo35XijZoeYhERcwuCIiAIiIAiIgCIiAw+cXhmPYbeb48gdo0Uszfyg08I9ui85XvfI90kji57iXOJ6yekq6G99e/oXsikt7H8Mt2rI6YDXmWN+yO+aB61S5ej2evFTn5v9jUvfPAV5N1y0fQjYtZi5vDJXukrX+XjcQ3/ACtaqPQxSTzMgiGskrgxg8ZJ0C9H8aoIbNjtstETmBlFSRU40P3jA3/ZR3meK4w83+xmhc2yJ9slAaXLe2w3RlZC1+v4w7k/uHtWn0lRNSVUVVTSOimieHse3paR0FTTtVsv0Yxwz04D6qiJlYAdS5undD2c/UoRXwj4j0ktJr5SXJS+0v5/U+r7Bqo6nQxi+sfsv+P0O1jWPC37YLPtAxeANo6moMF8t8Q50pmBYZmN64S4hx+9PkVlVWe31lTb6yOso5nwzRHVrmHQ+bzKyNvqWVlBT1cfeTxNkHrGq9xsW/2brVwX9+CSz5rwfv5nkN92eO32KdXclnl5en9EI763gwtnpdnupFUBW/31vBhbPS7PdSKoC+jbV8uvdnlbu+EXZtdDU3O5U1uo4+yVNTK2KJn3znHQD2rruBa4tcCCDoQekFdHPgVG57E8tdhW0m1Xp7y2kMna9aPHC/k4+rk79FX/AAWuAc1wc0jUEdBHjXmYeY0V5N2TL/ps2WUTKiXjuFpPaNTqeZDR9jcfOzT1gribxRlK1ezNiiX+pm9t2VjDdmV3vLJA2rMXa9H4zNJ3LSPNzd+iqAHUnUkknpJ61YbfTyvtzI7Zh9NJrFb4+2qoA8jNINGA+ZnP9NV5WztdHZ08T6yIXSzLARdmGiqZqCprmRk09M5jZX9QLyeEevhPsXWXSyVGxbMvCRjPpam961Wt3yPA670pT/xqqWzLwkYz6WpvetVrd8jwOu9KU/8AGuTrPm6i6vuSKYLLYZ92Nk9I0/vWrErLYZ92Nk9I0/vWrqT7rKUej7+/PnX5X6f3586/K8QdEKAt937grF6UPunKfVAW+4D9IFjPULqfdOW5oPmYFdvcZUlbjsR8L+J+lIfnLTluGxNwbtexMuOg+isPzl6m77uXszTj1R6CFcLkrheKOgEREBAW+79wNi9Kn3L1UlW033nNGCWBmvdG6EgeQRO/mFUtep2v5Zfmad3fN32DeGbE/SUf+6v4qB7BATtmxMD+8WfuKv4udvP3sfYt0/dYREXHLwiIgCIiAIiIAiLkDU6ICqG+3e+2MrsePxv1bRUjqmQfjyu0H+VnyqvS3nb3fPpg2vZFXtfxxMqzTQnXlwRARj5pPrWjL2Ojr7OiMfQ0LHmTZyCQdQdCF9e2qr+1T/rXfzXxJA6SAuOJv3w9q2MEDJ2S+3ey3iku1ur54quklbLE4vJAcD1jrB6COsKxFBcrdldgZlVkY2KNzgy4UYOpoZz0j827pafV0hVk4m/fD2rY9nuXXDDb+y6UIbPBI3sVZSPP2OqhPfMd+8HpB0K878SfD9W86XgfKa7r9fL2Z19n3azbb+Nc4vqvNf2Tmpz2UV3buF0rC7V9K50DvMDqPkIUK1HaFVQ0d7sszp7RcWGSme7vmEcnRP8AE9h5H1HrUh7DK7Se5W1x75rZ2Dzdyf3hfHvh9W7fur09yw3mLXr1/g9/v3Z63bO3qeUsNft/Jru+t4MLZ6XZ7qRVAVv99bwYWz0uz3UiqAvuW1fLr3Z8vu75s2yjltQxY/8Al6X3rVtW83h/0pbU611PFwW+6611LoOQLj9kaPM/X1ELVdlPhPxb0vS+9arX72WIfTJs0lutNFx19jeapmg5uhPKVvs0d+imov7LVQz0awIx4oMpUpY3Yc9psJzmdl1qOxWi40zmVBJ5NewF8bvPyLf0lE6LdtqjbBwl0ZXF8LyjLZhfKrJspueQVhPZq+pfMQfggnuW+oaD1LEosthtiqMmyu14/Sg9lr6lkGo+CCe6d6m6n1Kf2YR9EY6sk+6Yt9At1Kmu08fDV3u9w1JJHMQtbI2MfOd+koaVwd7ujp7dsSoLfRxiOmpbhTQxNHwWNjeAPYFT5aegtdtbm/FsnYuF4Ni2ZeEjGfS1N71qtbvkeB13pSn/AI1VLZl4SMZ9LU3vWq1u+R4HXelKf+Na2s+bqJ19yRTBZbDPuxsnpGn961Yld6wVcdvv1ur5mudHS1UUzw3pLWvDiB5eS6slmLKUek7+/PnX5UFO3osFLifoLkXT/wBmH/kT66LBf7lyL9VD/wAi8l/g6j8DN7tIeZOqiDe7tD7nsdnqomcT7bWQ1R06m6ljj/nWJ+uiwX+5ci/VQ/8AIt1wnNsS2w4teaChjq2QmI0tbTVUYbI1sjSA4aEgjkdDr0hShTdppq2UWkmYcozXCmUMXatNfUWu60lzpHcNRSTsniP4zHBw+ULv5tjlfiWVXDHbkwioopizi05SN6WvHkcND61hl6tNSWV0ZpdD0awfJbdl+K0GQ2uRroKuIOLQecT/AITD4i06hZlUG2SbUMh2c3F8ltLau3TuBqqCZx7HIfvmn4L9OsesFWVx3eQ2c3Gma65S3Cz1Gndxz0zpGg+RzNdR5wF5nU7bbVJ8CyjchbFrmTIuVF1Rt/2VwxF4yKWYj4MdFMXH2tCiXapvJ1VzoprVg1HPbopQWPuNRoJ9D09jaNQz8oknxaKmrQX2PHDj35GZWxXiYrfCzSmv2ZUmN2+ZstNZGvE72nVpqH6cQ/RAA85Kgtcuc5zi5zi5zjqSTqSfGVwvUUUqmtQXgacpcTySrup2h9020WuYM1it0UtXIdOQ0YWt/wAzwrvKDNz/AAmSw4bUZRXwmOsvfD2AOGhbTN70/pHV3mDVOa83udysvePDkbdMcRCIi55aEREAREQBERAFi8wu8dgxS7XuUgNoaOWfn42tJA9uiyijjeRo7/ctktytmOW2puFXWSxRSRU7eJ4i4w5x06+9A9aspip2Ri+jZiTwslFZZJJpXzSuLpJHF7yesk6k+1flbj9SzaP+BF8/ZXJ9SzaR+BF8/ZXL2PbV/iX1NDhfkT5ueYlaqnALlebraaKtfV3Axwmpp2ycLI2gcuIHTunH2KbfpTxX8GbL+wRf/Kw2xLHajFdllhstZAYKyKn7JUxnpbK9xe4Hyji09S3JeU1VzndKSfLJuwjiKRhvpTxX8GbL+wRf/KqFvZY9TWHau6ShpIaWkr6KKojjhjDGBw1Y7QDkObdfWrrKBN73Br5k9JYbpj1pqblU0j5YJ46dvE8Ru0c06dJALT7Vftt/BeuJ8mRtjmPI1PDLeLJssx+3aky14dd5yTyBl7mNo/QYD5ytu2ZV3aGaUDi7RkzjA79IaD5dFjcVxzLK7Z3YxXY7caS5W2N1umhlhLXPjYeKKQA9I4XcJ8rV3KfFsqp6iOeOyVofE8PaeDrB1C+Vb9DWw3yzUODeJJppNrCxjp6H0bap6Se0xo40sxaeWk8vOTt763gxtnpdnupFUBXW3pMYyDL9mtDT2C2S1tZDXx1EtPGRxhvY3tOgJ56Fw5KsX1Idp34E3f8AVj+a+z7XdWtOk5JHzO6L4zGbKfCfi3pel961ehdRFFPFLBPG2SKRpZIxw5OaRoQfOFSrZhsn2i020XHqytxOvpKWmuMM8004a1jGMeHOJOviHQrsHpWnu9kZzjwvPIsoTSeTzz2rYrLhef3bHnh3YoJi6mcfhwu7qM+w6ecFaureb1+zO7ZbBbMhxq3PrrnSA09TBERxyQk6tcNenhdr6neRV8+pDtO/Am7/AKsfzXV0ushZUnKST8SicGpckaMrA7luLdvZXcssqI9YbZD2vTkjl2aQcyPMwH/Eo3GyDacTp9JN2/wN/mrgbCMOlwfZpb7PWRtjuMhdU1waQdJX/B1HTwgNb6lRuWqgqHGDTb5E6oPiyzTt8zwRQ+lYPmyKm6vDvQYxfMr2Y9oY/QPr6yGuinMEZHG5gDgdNekjiHJVX+pDtO/Am7/qx/NR2u2uNGJSS5+Yui3IxGzLwkYz6WpvetVrd8jwOu9KU/8AGoI2b7Jdo0G0CwVVXidwpKanuEM000wa1jGMeHOJOviCsjvLYvecv2X1FtsFL23Wx1cVS2AOAdI1uuobry1566eRV6y2D1VTTWESri+BlFkW8/Uh2nfgTd/1Y/mn1Idp34E3f9WP5rq9vV+JfVFHDLyNGRbz9SHad+BN3/Vj+afUh2nfgTd/1Y/mnb1fiX1Q4X5GjKy24z/WMt/Ipf3yKIvqQ7TvwJu/6sfzVg90jBMnxGkv1bkltktprnQsgglI7IQzjJcQDyHdADXyrS3G6t6eSUlnl4+pZVF8S5Gd3itk7NoFoZdLQ2OPIqGMiEnkKqPp7E49R62nqJ06DypbcKOrt9dNQ19NLS1UDyyWGVpa9jh0ggr0sWibU9lOKbQoOyXOndSXNjeGK4UwAlA6g7qe3yH1ELm6HcexXBZ3f2LbKuLmig6KYc13d8/sUr5LVTw5BRg6tfSODZdPLG466+YlRtcMVye3ymKuxy8Uzx0iSikH+y79eoqsWYSTNZxa6ow6Lvsst6e4NZZrk5x6AKWQn9y2jG9ku0bIJWtocUuEUbv/ANqtna8Y8ur9Pk1UpWwisyaRhJvoaQph3edj9XnF0hvl7p5IMZp38Ti4aGtcD/Rs/F++d6hz6JN2Y7tNsts0VxzetZdZ2kOFBT6inB/HcdHP83IedWCpoYaanjp6aGOGGJoZHHG0Naxo6AAOQC5Gs3SOHCn6/wBGxXS+sjmKOOKJkUTGxxsaGsY0aBoHIADqC/SIuAbIREQBERAEREAREQBYzKcgtGL2WW9X2tbRUELmtkmcxzg0uOg5NBPMkdSyaivev8B13/P03vmq2iCssjB+LMSeE2SDi+QWjJ7LDebFWisoJi4RzBjmhxadDycAekFZRRXup+A+zfnqj3rlKaXwVdkoLwZiLykzF5RkVkxe0Pu1/uUFvo2EN7JKe+cehrQObj5BzWqYvtl2c5Jd47VbchYKyZ3DDHUQvh7K7xNLgAT5NdSoX3yKmouG0bFsdkme2jNO1/CD0PlmLC7z6NC6O9Xs7xfBbZjtfi1E+3yyTSQS8MrncZY0Oa86k6O115jxrfo0VUowU2+KeceSwVysabx4FtV1LzdLdZrZPdLtWw0VFTt4pZ5ncLWDz/7Lp4TXTXPDLJcal3FPVW+CaQ+Nzo2kn2lQdvw3KpgxfHrXG8tgqauWaVoPJxja3h183GStPT0drcq2WSliOSQbVty2YXO6Mt0GStjlkfwMfPTyRRuJ6O7cNB69FI6rHtA2F0lTspxupwawvqL86OB9Y8VGhnY+Lie53G4N5O00006VPWzGmvFFs8sNFf43R3SnoY4alrnhxDmjTmQSDyAVmpqpjFSqfjjD6kYSk3iR3cryKzYrZn3i/wBc2ioY3tY6VzHOAc46AaNBPSvpjN9tWS2SC9WSrbWUFRxdimDXNDuFxaeTgD0gjoUa73PgTrvjlN89d/dd8BuP/wDse/kUXRH/AB+18c4/QzxPjwSRVVEFJSy1VVNHBBCwvlkkcGtY0DUkk9ACjiHbvssluYoG5MGuLuATOppGwk/llumnl6F097KqqaXYnchTuc0T1NPDKR94XgkeY6AKHrPstoct3cbVc8Ss0VblRrndsytmDX8Ie8OY7iIGgbwED19au02mqlX2lray8f8A0jOck8ItvG9kkbZI3NexwDmuadQQegg+Ja1mufYjhctLFk14Zb31bXOgDonv4w0gE9y06dI6V8djtuvNo2YWC1ZBE6G5UlL2GaMvDy0NcQ0agkHueHrXGfbOMSzyoopsmoJap9G1zICyofHwhxBPeka9AWrGNcbMTfL0J5bXIwv1dNlP4XQ/ss//AMLfLLcqG82mlu1tnFRRVcTZoJQ0gPYeg6HQj1qnW7lgmM5ln+QWnIKOWpo6Kne+BjJ3RlpEwaObTqeRVw7DaqKx2Sjs1tidFRUULYYGOcXFrG8gNTzK2NbRTRLgg3n1I1ylJZZhs1z7EcMnpYMmvDLfJVtc6Bronv4wCAe9adOZHStmaQ5ocDqCNQqt78X2/wAU+LT/AD2K0NP/AFeL8hv7lVbTGFMJrrLP6GYybk15HSyO+WjHLRNdr5cIKChh045pToNT0AdZJ6gOa0/Gds+zjIrxFabdkLRVzO4IW1ED4RI7qDXOAGp6h1qJt+avqGsxe2NkcKd4qKhzdeRe3gaCfMCfaV0dtexR9LaMYqdm+NVc9UID286CQuJcGsLJDxO5OJ4uhbVOkpdcXZJpyzjyWPMhKcsvC6FqFicqyKyYtZ5LvkFxhoKJhDTJIT3Tj0NaBzcT4gu3ZnVTrPQurWuZVGmjM7XdIk4RxA+vVVq34qqo+iOK0D3vbR9inmIHQX8TW6+cN/etXS0K65Vtk5y4Y5Jjw/a/s9yu8MtFnvoNdIdIoaiB8JlPiaXDQnydK3xVi2o7HK05Di172U2CPtKOmhmlmgqmtBe14cyTu3cyW89R0qz2uvM9JWdTXVFRlU+T8H1Qg5PKZwiItUmaxFn+IS5o7DWXlhvzXlhpOxSahwbxkcXDw97z6Vs6qva/+t+o+OS/6Uq1C2tVRGrhx4pMhCTlk+dXUQ0lJNVVD+CGCN0kjtNeFrRqT7AsFhGc4vmkVTJjF3bcGUhaJi2N7OAu1Le+A6dD0Lu5h9yF69HVHunKANxb7U5T+epfmyJXRGVE7H1WP1Dk1JIspxO++PtXWulworZb57jcquKkpKdhfNPM/hYxo6ySuwoK31a6op9mtto4pC2KrubRMAe+DWOcAfJrofUFXp6u2tjDzMylwrJttu257L6+6Mt8OTNZI9/AySankjiJ6u7c3Qec6KSAQRqCCD0EKqGT7HKav2E4nd8Ox6orchqmQzVj4pCXSskjc5xIcdAAeEDRWK2VQXal2bY9S32GWG5wUEcVTHL37XNHDofLoAr9VTTCKlW/HGGRhKTeGbKiItIsCIiAIiIAiIgCIiAKK96/wHXf8/Te+apUUV71/gOu/wCfpvfNWxpPv4e6Iz7rOd1PwH2b89Ue9cpTUB7uW0XBsf2SWu1XrJ7fQV0Uk5kgmeQ5oMjiOrrBU52uvo7pbae5W6oZU0dTGJYZmd69h6CPIpayEo3SbXLLMVtcKKub2fhvxT4rTf6ly2Tfo+5rG/j0/uwtc3xGvodqeLXiaN3aopI+6A6THOXOHn0cPaud7/NsXymz45SY7eKW6SMmlqJBTu4uxtc0Bod4nE9XTyXVoi29O0uXMol/sWK2Z+DjGfRNL7pqgrfo+1+K/nKr5sanzBKSagwew0VS0smgttPHI09ThG0EKCd+amlfZMXq2tJiZU1ETneJzmMI9vCfYtDQv/mL3f8AJbZ92fTartB2mYLZ7BV2Gio24460UTO2p6YSDs7o+bdeIHoaOpTFsjvtfk+zax3+6GI1tbT9kmMTOFuvE4ch1cgFAW3zO8XvmwbF7RartTVde91K+WnjfrJAIoS13GPg90dOfSpp3ePAlivxM/Pcp6mtLTKTjh5wYg/t4yYHe58Cdd8cpvnrv7rvgNx//wBj38i6G9z4E6745TfPXf3XfAbj/wD7Hv5FB/Ir/u/gz/1PyN2zHHrdlWM12P3aNz6Oti7G/hOjmnpDmnxggEeZVJrabaBu8Zi2amm7cstXJ3J59rVrR8Fw+BIB6x1ahT7vL5PkuIbPIr1jFV2rUMr4o5pOxNkAjc13U4Ed9w81GO1DaDZMr3YaEXK9Udbks8kHZIGlombMyQ8biwd6OHXnppofKrdCrFFZWYSeGv5I2Yz6osPhuQUOVYtbshtpd2rXQiVjXd8w9Dmnyggj1LLt74edRhut0tRS7ELGKlrmmV080YP3jpXFp9Y5+tSe3vh51z7oKFkoromy6Lykyqu554V8t+Jyf6hqtSqrbnnhXy34nJ/qGq1K29z+/fsv2K6e6Vb34vt/inxaf57FaGn/AKvF+Q39yq9vxfb/ABT4tP8APYrQ0/8AV4vyG/uWNR8tT+f7iHfkVe36Ptnivxaq+dGrOWv7V0fxeP5oVat+emlM2K1gaexdjqoeLTlxaxnT2LsbcNtUlFj2Ls2dZRD21LAX1rYGMlLBwMDWPDgeF2vFy6Ve6J30Uxh6keJRlJssqtC227N6LaRjDKF84pLlSOMtDUkahjiNC1w62u0Gvi0B6lt+POrHY/bXXFxdWupIjUkjTWQsHFyHRz1UIbyW0XMcGzywQWm4iks1XTtkqB2ux/GWykSaFwJ70t6FpaWFkrkq3hosm0o8zQdl+fZbsfzNmDZrFKbP2Vsbo5DxdrBx5TQu64+sjo6dNCrdggjUEEdRCqVvgX7HcoveMMxq40l0qewSNe+leH6B7m9jaSOvXi5dI18qtdbYpILbSwy/0kcDGP8AOGgH5Vs65KUIWtYlLOfyI18m4n3REXNLSq9r/wCt+o+OS/6Uq1CqTU3e2WHfKrrreK2KioYKyTss8p0azWm0GvrICsljGeYbk9wdb8fyKhuVWyMyuigcS4MBALujo1I9q6WvhJqEkuXCimprn7mQzD7kL16OqPdOUAbi32pyn89S/NkU/wCYfchevR1R7pyrFugZli2K23IWZHfKO2OqZKd0IncRxhrX66aDq1HtWNPFy0tiSz0MzeJotioB33vuDsXpQ+6cpqxnIrHk1vdcMfudPcqRshidLASWh4AJHn5j2qGt9mnlk2dWioYwmOG6gSH73ijeB8oVehTjqYp+ZmznBkm7GvBLifoin+YFtirDkW12Gx7v2I02HZJBBkMbIKeohY1r5ImRxuD+JrgQBxBuh6+pTrskr7vdNmeP3O/TOmuVXRtmnkcwNLi4kg6AADuSOpR1OnnDNkujbQhNPkbSiItQsCIiAIiIAiIgCIiALDZrjFpzDHZ7BfI5ZKGdzHSNikLHEtcHDmPKFmUWYycXldR1Ii+ty2Xf3fc//wCg9SjY7bSWazUVooGOZSUUDIIGudqQxo0AJ6+QXcRWWX2WLE5NkVFLojXs9wvHc4s4teR0AqYWO44ntcWSRO6NWuHMfuPWtNxPYFs6x28Q3WKira+ogeHwiuqOyMY4cweEAAkeXVSmiRvthHhjJpBxTeWjlYXM8XsmYWCax3+jFVRykO04i1zHDoc1w5gjxrMoq4ycXlEupEtr3eNmlDS1kD6G4VhqmBhkqKvV8Q4ge4LQOE8gNenTUdakjFrHb8ax6isNqZIyhoo+xwtkeXuDdSeZPTzJWSRWWX2WcpybIqKXQwmcYrZ8zx6Sw32KaWhkkZI5sUpjdxNOo5hfTDscteJY5S4/ZY5Y6Cl4uxNkkL3DicXHUnp5krLooccuHhzyM4WcnTvlqt18tFTabtSRVlDVM4JoZBq1w/2PXr1KK6Xdw2ZQXIVbqW6Txh3EKaWtJiPkOgDiPWpgRTrvsrTUJNGHFPqj50sEFLTRU1NCyGCFgZHGxujWNA0AA6gAvqOR1XCKokaZgmzHEsJvVdeLBTVcVXXRmOd0tS6QEF/GdAejmFuaIpTnKbzJ5ZhJLoadtE2aYpn1VRVOSU1VNJRMcyDsNS6MAOIJ106eYC3BrQ1oaOgAALlEc5SSi3yQwuphM2xOw5nY32bIaEVdI5we3ui18bx0Oa4cweZWi4tsA2dY/eYbrFR11fPA8SQsrajskbHDmDwgAHTy6qVUU4X2Qjwxk0jDim8tHK1vP8JxvObSy25HQdsxxu44ZGPLJIXdBLXDo8o6CtjRQjJxeYvDMtZ6kY4TsK2fYpeorxR0dZW1kDuOB1bP2RsTupwaABqOonXRSciKVls7HmbyEkugREVZkjbKth+z/JshrL9dqKvfXVj+yTOjrXsaToByA6OQCyGz7ZRhuCXea647SVcVVNAYHumqnSDgJBOgPRzAW8ornqLXHgcngjwRznB8a6miraGooqgEw1ETopADoS1wIPPq5FRQN3HZaAALfc+X/kHqXUWK7rK+5Joy4p9TAYFh9jwiw/QTH4ZoaMzOnIllMji92mp1PmC7+SWS1ZHZKmzXqijrKCpbwyxP6+sEEcwQeYI5hZBFBzk5cTfMYWMEQ2zdz2aUVzZWupbnWMY7ibTVNXxReYgAEjyEqXY2MjjbHGxrGNAa1rRoAB0ADxLlFKy6y3vvIUUugREVZkIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiIAiIgCIiAIiID//2Q==" alt="AMLO Logistics">
+    <div>
+      <h1>AMLO Dispatch</h1>
+      <div class="sub">Dispatch Sheet &amp; RTS for station <b>DVB4</b>, built from the Waveplanner and Vehicles Data</div>
+    </div>
+  </header>
+
+  <!-- 1. FILES -->
+  <section class="panel" id="p-files">
+    <div class="panel-head">
+      <div><div class="step">STEP 1</div><h2>Load today's files</h2></div>
+      <p>Files are read on this computer only. Nothing is uploaded.</p>
+    </div>
+    <div class="files">
+      <label class="drop" id="drop-routes">
+        <span class="t">Routes file</span>
+        <span class="h">Waveplanner (.xlsm, tabs Planing + RTW) or Day of Ops Plan (.xlsx)</span>
+        <span class="f" id="f-routes">No file yet</span>
+        <input type="file" id="in-routes" accept=".xlsx,.xlsm">
+      </label>
+      <label class="drop" id="drop-veh">
+        <span class="t">Vehicles Data</span>
+        <span class="h">The VehiclesData export (.xlsx) with vehicleName, serviceType, operationalStatus</span>
+        <span class="f" id="f-veh">No file yet</span>
+        <input type="file" id="in-veh" accept=".xlsx,.xlsm">
+      </label>
+    </div>
+    <div class="row">
+      <label class="fld">Dispatch date<input type="date" id="in-date"></label>
+      <label class="fld">Lead driver<input type="text" id="in-lead" list="dl-lead" placeholder="None" style="width:200px"></label>
+      <datalist id="dl-lead"></datalist>
+      <span class="muted" style="font-size:13px">No files at hand? <button class="link" id="btn-example" type="button">See it with example data</button></span>
+    </div>
+    <div class="msg bad" id="load-msg" hidden></div>
+  </section>
+
+  <div id="work" hidden>
+    <div class="wrap" style="max-width:none">
+      <div class="row" id="summary"></div>
+
+      <!-- 2. ROUTES & VANS -->
+      <section class="panel">
+        <div class="panel-head">
+          <div><div class="step">STEP 2</div><h2>Routes &amp; vans</h2></div>
+          <p>Change a van from its list. Picking a van another route has swaps the two. Click a driver name to edit it. EXP. RETURN = wave − 20 min + route duration.</p>
+        </div>
+        <div class="toolbar">
+          <label class="toggle"><input type="checkbox" id="chk-force"> Allow any van (force an EDV on a gas route or a gas van on an electric route)</label>
+        </div>
+        <div class="toolbar">
+          <button class="small" id="btn-allmgs" type="button">All MagSafe</button>
+          <button class="small" id="btn-nomgs" type="button">No MagSafe</button>
+          <button class="small" id="btn-reset" type="button">Reset to defaults</button>
+          <span class="muted" id="counts" style="font-size:13px"></span>
+        </div>
+        <div class="tablewrap"><table>
+          <thead><tr><th>MGS</th><th>Van</th><th></th><th>Route</th><th>Type</th><th>Driver</th><th>Stg</th><th>Exp. return</th><th>Ex phone</th></tr></thead>
+          <tbody id="tb-routes"></tbody>
+        </table></div>
+      </section>
+
+      <!-- 3. POMPANO -->
+      <section class="panel">
+        <div class="panel-head">
+          <div><div class="step">STEP 3</div><h2>Pompano (DMF3)</h2></div>
+          <div class="toggle">Do we have routes in Pompano today?
+            <span class="yn" id="yn-pomp"><button type="button" data-v="1" aria-pressed="false">Yes</button><button type="button" data-v="0" aria-pressed="true">No</button></span>
+          </div>
+        </div>
+        <div id="pomp-box" hidden>
+          <div class="tablewrap"><table>
+            <thead><tr><th>MGS</th><th>Van</th><th>Route</th><th>Time</th><th>Driver</th><th>Stg location</th><th>Duration (min)</th><th>Exp. return</th><th>Ex phone</th><th></th></tr></thead>
+            <tbody id="tb-pomp"></tbody>
+          </table></div>
+          <datalist id="dl-vans"></datalist>
+          <div class="toolbar" style="margin-top:10px"><button class="small" id="btn-addpomp" type="button">+ Add route</button>
+            <span class="muted" style="font-size:12px">Van: pick a spare from the list or type one. Time and duration are optional; with both, the expected return is calculated.</span></div>
+        </div>
+      </section>
+
+      <!-- 4. EXTRAS -->
+      <section class="panel">
+        <div class="panel-head">
+          <div><div class="step">STEP 4</div><h2>Extra people</h2></div>
+          <div class="toggle">Do we have extra people today?
+            <span class="yn" id="yn-extra"><button type="button" data-v="1" aria-pressed="false">Yes</button><button type="button" data-v="0" aria-pressed="true">No</button></span>
+          </div>
+        </div>
+        <div id="extra-box" hidden>
+          <div class="extras" id="extras"></div>
+          <div class="toolbar" style="margin-top:10px"><button class="small" id="btn-addextra" type="button">+ Add name</button>
+            <span class="muted" style="font-size:12px">They print under the Dispatch Notes and in EXTRAS / EROS on the RTS.</span></div>
+        </div>
+      </section>
+
+      <!-- 5. NOTES -->
+      <section class="panel">
+        <div class="panel-head">
+          <div><div class="step">STEP 5</div><h2>Dispatch notes</h2></div>
+          <p>Optional. Empty boxes stay blank to write by hand, and they stay fillable in the PDF.</p>
+        </div>
+        <div class="notes" id="notes"></div>
+      </section>
+
+      <!-- 6. CHECKS -->
+      <section class="panel">
+        <div class="panel-head"><div><div class="step">BEFORE PRINTING</div><h2>Checks</h2></div></div>
+        <ul class="checks" id="checks"></ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+<div class="actions" id="actions" hidden>
+  <div class="in">
+    <span class="stat" id="act-stat"></span>
+    <button class="primary" id="btn-pdf" type="button">Download PDF</button>
+    <button id="btn-xlsx" type="button">Download Excel</button>
+  </div>
+</div>
+<script>
+"use strict";
+/* =====================================================================
+   SETTINGS - change these when something changes at the station
+   ===================================================================== */
+const CONFIG = {
+  DSP_CODE: "AMLT",
+  STATION: "DVB4",
+  LEAD_DRIVERS: ["Jacob Ingber", "Hernan Lima", "Andrew Calvo"],
+  MAGSAFE_COUNT: 23,            // first N routes of the day get MagSafe by default
+  MAX_EXTRA_PHONES: 5,
+  RETURN_OFFSET_MIN: 20,        // expected return = wave - 20 min + route duration
+  SPECIAL_WAVES: { DMF3: "DMF3 / POMPANO BEACH", DMO6: "DMO6 / BOCA RATON" },
+  NOTE_CATEGORIES: ["CALL OUTS / NO SHOWS:", "VTO (VOLUNTARY TIME OFF):", "CANCEL SHIFTS:",
+                    "ON ROUTE EDUCATION (ORE / NURSERY):", "GENERAL DISPATCH NOTES:"],
+  RTS_SIDE_LABELS: ["Late arrival:", "Missed ClearQuote:", "Cancel shift:", "Rivian / Van Service:", "VTO:"],
+};
+const LOGO_B64 = "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";
+const LOGO_W = 360, LOGO_H = 176;
+
+/* ---------------- small helpers ---------------- */
+const clean = v => (v === null || v === undefined) ? "" : String(v).replace(/\s+/g, " ").trim();
+const isElectric = st => /electric|rivian/i.test(st || "");
+const vanDisplayName = n => clean(n).replace(/\s*-\s*/g, " ");
+function naturalCmp(a, b) {
+  const pa = a.replace(/\d+/g, "").trim(), pb = b.replace(/\d+/g, "").trim();
+  if (pa !== pb) return pa < pb ? -1 : 1;
+  const na = parseInt((a.match(/\d+/) || ["0"])[0], 10), nb = parseInt((b.match(/\d+/) || ["0"])[0], 10);
+  return na - nb;
+}
+function cleanDriver(da) {
+  let s = clean(da);
+  if (!s || s.startsWith("#")) return "";
+  s = s.split("(")[0];                 // "Name (A3724X...)" -> "Name"
+  s = s.replace(/\s*,\s*/g, " ");      // "Marc,McCray" -> "Marc McCray"
+  return clean(s);
+}
+/** "10:40 AM" | "10:40" | Excel time fraction -> minutes after midnight (or null) */
+function parseTime(v) {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") { const f = v % 1; return Math.round(f * 1440); }
+  const m = String(v).trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp][Mm])?$/);
+  if (!m) return null;
+  let h = +m[1]; const mi = +m[2]; const ap = m[3] && m[3].toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return h * 60 + mi;
+}
+function fmtTime(min) {
+  if (min === null || min === undefined || isNaN(min)) return "";
+  min = ((Math.floor(min + 1e-6) % 1440) + 1440) % 1440;
+  let h = Math.floor(min / 60); const m = min % 60; const ap = h >= 12 ? "PM" : "AM";
+  h = h % 12; if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, "0")} ${ap}`;
+}
+/** Same math as the Day of Ops Plan, column O:
+ *  wave - 20 min + ROUNDUP(duration/60, 2) hours */
+function expectedReturn(waveVal, durMin) {
+  const w = parseTime(waveVal); const d = Number(durMin);
+  if (w === null || !durMin || isNaN(d) || d <= 0) return "";
+  const hours = Math.ceil(d / 60 * 100 - 1e-9) / 100;
+  return fmtTime(w - CONFIG.RETURN_OFFSET_MIN + hours * 60);
+}
+function waveSortKey(w) { const t = parseTime(w); return t === null ? [1, w] : [0, t]; }
+function cmpWave(a, b) { const ka = waveSortKey(a), kb = waveSortKey(b);
+  return ka[0] - kb[0] || (ka[1] < kb[1] ? -1 : ka[1] > kb[1] ? 1 : 0); }
+
+/* =====================================================================
+   ZIP + XLSX READER (no libraries: uses the browser's own decompressor)
+   ===================================================================== */
+async function inflateRaw(bytes) {
+  const ds = new DecompressionStream("deflate-raw");
+  const stream = new Blob([bytes]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+function readZipIndex(buf) {
+  const dv = new DataView(buf); const u8 = new Uint8Array(buf);
+  let eocd = -1;
+  for (let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 70000); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("This is not an Excel file (.xlsx / .xlsm).");
+  const count = dv.getUint16(eocd + 10, true); let p = dv.getUint32(eocd + 16, true);
+  const entries = {};
+  const dec = new TextDecoder();
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const off = dv.getUint32(p + 42, true);
+    const name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    entries[name] = { method, csize, off };
+    p += 46 + nlen + xlen + clen;
+  }
+  return { buf, dv, u8, entries };
+}
+async function zipRead(z, name) {
+  const e = z.entries[name]; if (!e) return null;
+  const nlen = z.dv.getUint16(e.off + 26, true), xlen = z.dv.getUint16(e.off + 28, true);
+  const start = e.off + 30 + nlen + xlen; const data = z.u8.subarray(start, start + e.csize);
+  const raw = e.method === 8 ? await inflateRaw(data) : data;
+  return new TextDecoder().decode(raw);
+}
+const xmlParse = s => new DOMParser().parseFromString(s, "application/xml");
+const byTag = (node, tag) => Array.from(node.getElementsByTagNameNS("*", tag));
+function colIndex(ref) { let n = 0; for (const ch of ref) { const c = ch.charCodeAt(0);
+  if (c >= 65 && c <= 90) n = n * 26 + (c - 64); else break; } return n - 1; }
+
+/** Returns { sheetNames:[...], read(name) -> Promise<rows[][]> } */
+async function openWorkbook(arrayBuffer) {
+  const z = readZipIndex(arrayBuffer);
+  const wbXml = await zipRead(z, "xl/workbook.xml");
+  if (!wbXml) throw new Error("This file has no Excel workbook inside.");
+  const wb = xmlParse(wbXml);
+  const rels = xmlParse(await zipRead(z, "xl/_rels/workbook.xml.rels") || "<Relationships/>");
+  const relMap = {};
+  byTag(rels, "Relationship").forEach(r => relMap[r.getAttribute("Id")] = r.getAttribute("Target"));
+  const sheets = byTag(wb, "sheet").map(s => {
+    const rid = s.getAttribute("r:id") || s.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+    let t = relMap[rid] || ""; t = t.replace(/^\/?xl\//, "").replace(/^\//, "");
+    return { name: s.getAttribute("name"), path: "xl/" + t };
+  });
+  let shared = [];
+  const ssXml = await zipRead(z, "xl/sharedStrings.xml");
+  if (ssXml) shared = byTag(xmlParse(ssXml), "si").map(si => byTag(si, "t").map(t => t.textContent).join(""));
+  const cache = {};
+  return {
+    sheetNames: sheets.map(s => s.name),
+    async read(name) {
+      if (cache[name]) return cache[name];
+      const sh = sheets.find(s => s.name === name); if (!sh) return [];
+      const doc = xmlParse(await zipRead(z, sh.path) || "<worksheet/>");
+      const rows = [];
+      for (const r of byTag(doc, "row")) {
+        const ri = parseInt(r.getAttribute("r"), 10) - 1; const out = [];
+        for (const c of byTag(r, "c")) {
+          const ref = c.getAttribute("r") || ""; const ci = colIndex(ref); const t = c.getAttribute("t");
+          const vEl = byTag(c, "v")[0]; let v = vEl ? vEl.textContent : null;
+          if (t === "s") v = shared[+v] ?? "";
+          else if (t === "inlineStr") v = byTag(c, "t").map(x => x.textContent).join("");
+          else if (t === "b") v = v === "1";
+          else if (t === "str" || t === "e") v = v ?? "";
+          else if (v !== null && v !== "") v = Number(v);
+          out[ci] = v;
+        }
+        rows[ri] = out;
+      }
+      cache[name] = rows; return rows;
+    },
+  };
+}
+function headerMap(row) { const m = {}; (row || []).forEach((h, i) => { if (h !== null && h !== undefined && h !== "") m[clean(h).toLowerCase()] = i; }); return m; }
+const firstRow = rows => rows.find(r => r && r.some(v => v !== null && v !== undefined && v !== ""));
+
+/* =====================================================================
+   READ ROUTES (Waveplanner or Day of Ops Plan) and VEHICLES
+   ===================================================================== */
+async function readRoutes(wb) {
+  // find the sheet with the route list: needs DSP + Route Code + Wave
+  let routeSheet = null, rows = null, h = null;
+  const order = ["Planing", "Planning", "Solution", ...wb.sheetNames];
+  for (const n of order) {
+    if (!wb.sheetNames.includes(n)) continue;
+    const r = await wb.read(n); const hm = headerMap(firstRow(r));
+    if ("dsp" in hm && "route code" in hm && "wave" in hm) { routeSheet = n; rows = r; h = hm; break; }
+  }
+  if (!routeSheet) throw new Error("Couldn't find the route list. The routes file needs a tab with the columns DSP, Route Code and Wave (Waveplanner 'Planing' tab or Day of Ops 'Solution' tab).");
+  const hdrIdx = rows.indexOf(firstRow(rows));
+  const c = k => h[k];
+  const routes = [];
+  for (const r of rows.slice(hdrIdx + 1)) {
+    if (!r || clean(r[c("dsp")]) !== CONFIG.DSP_CODE) continue;
+    let wave = r[c("wave")]; if (typeof wave === "number") wave = fmtTime(parseTime(wave));
+    routes.push({
+      route: clean(r[c("route code")]),
+      service_type: clean(r[c("service type")]),
+      wave: clean(wave),
+      staging: clean(r[c("staging location")]).replace("STG.", ""),
+      dur: "route duration" in h ? Number(r[c("route duration")]) || 0 : 0,
+      driver: "da" in h ? cleanDriver(r[c("da")]) : "",
+    });
+  }
+  if (!routes.length) throw new Error(`No ${CONFIG.DSP_CODE} routes found in the '${routeSheet}' tab.`);
+
+  // driver names: RTW (Route, DA) -> Macro (Route Code, DA) -> any tab with Route code + Driver name
+  const drivers = {};
+  const take = (code, name) => { code = clean(code); const d = cleanDriver(name); if (code && d && !drivers[code]) drivers[code] = d; };
+  let rtwProblem = null;
+  if (wb.sheetNames.includes("RTW")) {
+    const r = await wb.read("RTW"); const hm = headerMap(firstRow(r));
+    const cr = hm["route"] ?? hm["route code"], cd = hm["da"] ?? hm["suggested da"];
+    if (cr === undefined || cd === undefined) {
+      rtwProblem = "The RTW tab has no driver (DA) column. It looks like the Planing data was pasted there instead of the RTW export.";
+    } else r.slice(1).forEach(x => x && take(x[cr], x[cd]));
+  }
+  for (const n of wb.sheetNames) {
+    if (n === "RTW" || n === routeSheet) continue;
+    const r = await wb.read(n); const hm = headerMap(firstRow(r));
+    const cr = hm["route code"] ?? hm["route"]; const cd = hm["da"] ?? hm["driver name"] ?? hm["driver"];
+    if (cr === undefined || cd === undefined) continue;
+    r.slice(1).forEach(x => x && take(x[cr], x[cd]));
+  }
+  let missing = 0;
+  routes.forEach(rt => { if (!rt.driver) rt.driver = drivers[rt.route] || ""; if (!rt.driver) missing++; });
+  const problem = missing === routes.length
+    ? (rtwProblem || "No driver names were found in the routes file.") + " You can type the names in the table, or fix the file and load it again."
+    : null;
+  return { routes, routeSheet, problem };
+}
+
+async function readVehicles(wb) {
+  const rows = await wb.read(wb.sheetNames[0]); const hr = firstRow(rows); const h = headerMap(hr);
+  if (!("vehiclename" in h) || !("operationalstatus" in h))
+    throw new Error("This doesn't look like the Vehicles Data export (no vehicleName / operationalStatus columns).");
+  const usable = [], unusable = [];
+  for (const r of rows.slice(rows.indexOf(hr) + 1)) {
+    if (!r || !r[h.vehiclename]) continue;
+    const v = { name: vanDisplayName(r[h.vehiclename]), service_type: clean(r[h.servicetype]),
+      status: clean(r[h.status]).toUpperCase(), ops: clean(r[h.operationalstatus]).toUpperCase(),
+      ownership: "ownershiptype" in h ? clean(r[h.ownershiptype]).toUpperCase() : "" };
+    (v.status === "ACTIVE" && v.ops === "OPERATIONAL" ? usable : unusable).push(v);
+  }
+  usable.sort((a, b) => naturalCmp(a.name, b.name)); unusable.sort((a, b) => naturalCmp(a.name, b.name));
+  return { usable, unusable };
+}
+
+/* =====================================================================
+   VAN ASSIGNMENT + PLAN
+   ===================================================================== */
+function gasPriority(v) { const rental = v.ownership.includes("RENTAL") || /^rental/i.test(v.name); return rental ? 1 : 0; }
+function pickVan(route, pool) {
+  const st = route.service_type.toLowerCase();
+  const exact = pool.find(v => v.service_type.toLowerCase() === st); if (exact) return exact;
+  let fam = pool.filter(v => isElectric(v.service_type) === isElectric(route.service_type));
+  if (!isElectric(route.service_type)) fam = fam.slice().sort((a, b) => gasPriority(a) - gasPriority(b) || naturalCmp(a.name, b.name));
+  return fam[0] || null;
+}
+let ROWID = 0;
+function buildPlan(routes, vehicles) {
+  const waves = [...new Set(routes.map(r => r.wave))].sort(cmpWave);
+  const pool = vehicles.slice(); const plan = []; let mgs = 0, n = 0;
+  for (const w of waves) {
+    let title, special = false;
+    if (CONFIG.SPECIAL_WAVES[w.toUpperCase()]) { title = CONFIG.SPECIAL_WAVES[w.toUpperCase()]; special = true; }
+    else { n++; title = `${({1: "FIRST WAVE", 2: "SECOND WAVE", 3: "THIRD WAVE"})[n] || "WAVE " + n} (DEPARTURE: ${w})`; }
+    const rows = [];
+    for (const r of routes.filter(x => x.wave === w)) {
+      const v = pickVan(r, pool); if (v) pool.splice(pool.indexOf(v), 1);
+      mgs++;
+      rows.push({ ...r, id: ++ROWID, van: v ? v.name : (isElectric(r.service_type) ? "EDV OVER" : "GAS OVER"),
+        mgs: mgs <= CONFIG.MAGSAFE_COUNT, phone: 0, exp: expectedReturn(r.wave, r.dur) });
+    }
+    plan.push({ wave: w, title, special, rows });
+  }
+  return plan;
+}
+
+/* =====================================================================
+   MINIMAL PDF WRITER (Helvetica, boxes, lines, JPEG logo, fillable fields)
+   ===================================================================== */
+const FONT_W = {"Helvetica":[278,278,355,556,556,889,667,191,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,278,278,584,584,584,556,1015,667,667,722,722,667,611,778,722,278,500,667,556,833,722,778,667,778,722,667,611,722,667,944,667,667,611,278,278,278,469,556,333,556,556,500,556,556,278,556,556,222,222,500,222,833,556,556,556,556,333,500,278,556,500,722,500,500,500,334,260,334,584,761,556,556,222,556,333,1000,556,556,333,1000,667,333,1000,556,611,556,556,222,222,333,333,350,556,1000,333,1000,500,333,944,556,500,667,278,333,556,556,556,556,260,556,333,737,370,556,584,333,737,333,400,584,333,333,333,556,537,278,333,333,365,556,834,834,834,611,667,667,667,667,667,667,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,500,556,556,556,556,278,278,278,278,556,556,556,556,556,556,556,584,611,556,556,556,556,500,556,500],"Helvetica-Bold":[278,333,474,556,556,889,722,238,333,333,389,584,278,333,278,278,556,556,556,556,556,556,556,556,556,556,333,333,584,584,584,611,975,722,722,722,722,667,611,778,722,278,556,722,611,833,722,778,667,778,722,667,611,722,667,944,667,667,611,333,278,333,584,556,333,556,611,556,611,556,333,611,611,278,278,556,278,889,611,611,611,611,389,556,333,611,556,778,556,556,500,389,280,389,584,761,556,611,278,556,500,1000,556,556,333,1000,667,333,1000,611,611,611,611,278,278,500,500,350,556,1000,333,1000,556,333,944,611,500,667,278,333,556,556,556,556,280,556,333,737,370,556,584,333,737,333,400,584,333,333,333,611,556,278,333,333,365,556,834,834,834,611,722,722,722,722,722,722,1000,722,667,667,667,667,278,278,278,278,722,722,778,778,778,778,778,584,778,722,722,722,722,667,667,611,556,556,556,556,556,556,889,556,556,556,556,556,278,278,278,278,611,611,611,611,611,611,611,584,611,611,611,611,611,556,611,556]};   // character widths (codes 32-255) for Helvetica / Helvetica-Bold
+const CP1252 = { "€":128,"‚":130,"ƒ":131,"„":132,"…":133,"†":134,"‡":135,"ˆ":136,"‰":137,"Š":138,"‹":139,"Œ":140,"Ž":142,
+  "‘":145,"’":146,"“":147,"”":148,"•":149,"–":150,"—":151,"˜":152,"™":153,"š":154,"›":155,"œ":156,"ž":158,"Ÿ":159 };
+function winAnsi(s) {             // JS string -> binary string (1 char = 1 byte, Windows-1252)
+  let o = "";
+  for (const ch of String(s)) {
+    const c = ch.codePointAt(0);
+    if (c >= 32 && c < 127) o += ch;
+    else if (c >= 160 && c <= 255) o += String.fromCharCode(c);
+    else if (CP1252[ch]) o += String.fromCharCode(CP1252[ch]);
+    else if (c === 9) o += " ";
+    else if (c === 10) o += "\n";
+    else o += "?";
+  }
+  return o;
+}
+function pdfStr(bin) { return "(" + bin.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)") + ")"; }
+function textWidth(s, bold, size) {
+  const w = FONT_W[bold ? "Helvetica-Bold" : "Helvetica"]; let t = 0; const b = winAnsi(s);
+  for (let i = 0; i < b.length; i++) { const c = b.charCodeAt(i); t += c >= 32 ? w[c - 32] : 0; }
+  return t * size / 1000;
+}
+const f2 = n => (Math.round(n * 100) / 100).toString();
+const rgb = hex => { const h = hex.replace("#", ""); return [0, 2, 4].map(i => parseInt(h.substr(i, 2), 16) / 255); };
+const col3 = c => c.map(x => f2(x)).join(" ");
+function b64ToBin(b64) { return atob(b64); }
+
+class PdfDoc {
+  constructor() { this.W = 612; this.H = 792; this.pages = []; this.addPage(); }
+  addPage() { this.page = { ops: [], fields: [] }; this.pages.push(this.page); }
+  op(s) { this.page.ops.push(s); }
+  rect(x, y, w, h, { fill = null, stroke = "#000000", lw = 0.5 } = {}) {
+    if (fill) this.op(`q ${col3(rgb(fill))} rg ${f2(x)} ${f2(y)} ${f2(w)} ${f2(h)} re f Q`);
+    if (stroke) this.op(`q ${f2(lw)} w ${col3(rgb(stroke))} RG ${f2(x)} ${f2(y)} ${f2(w)} ${f2(h)} re S Q`);
+  }
+  line(x1, y1, x2, y2, color = "#999999", lw = 0.5) {
+    this.op(`q ${f2(lw)} w ${col3(rgb(color))} RG ${f2(x1)} ${f2(y1)} m ${f2(x2)} ${f2(y2)} l S Q`);
+  }
+  path(points, color = "#000000", lw = 1.2) {
+    const [p0, ...rest] = points;
+    this.op(`q ${f2(lw)} w 1 J 1 j ${col3(rgb(color))} RG ${f2(p0[0])} ${f2(p0[1])} m ` + rest.map(p => `${f2(p[0])} ${f2(p[1])} l`).join(" ") + " S Q");
+  }
+  text(x, y, s, { bold = false, size = 8, color = "#000000", align = "l" } = {}) {
+    if (s === null || s === undefined || s === "") return;
+    const w = textWidth(s, bold, size);
+    const tx = align === "c" ? x - w / 2 : align === "r" ? x - w : x;
+    this.op(`BT /${bold ? "F2" : "F1"} ${f2(size)} Tf ${col3(rgb(color))} rg ${f2(tx)} ${f2(y)} Td ${pdfStr(winAnsi(s))} Tj ET`);
+  }
+  image(x, y, w, h) { this.op(`q ${f2(w)} 0 0 ${f2(h)} ${f2(x)} ${f2(y)} cm /Im1 Do Q`); }
+  field({ name, x, y, w, h, value = "", size = 8, color = "#1E3A8A" }) {
+    this.page.fields.push({ name, x, y, w, h, value, size, color });
+  }
+  toBlob() {
+    const objs = [];                         // binary strings, index = obj number - 1
+    const add = s => { objs.push(s); return objs.length; };
+    const reserve = () => { objs.push(null); return objs.length; };
+    const catalogN = reserve(), pagesN = reserve();
+    const f1 = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+    const fb = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+    const jpg = b64ToBin(LOGO_B64);
+    const im = add(`<< /Type /XObject /Subtype /Image /Width ${LOGO_W} /Height ${LOGO_H} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n${jpg}\nendstream`);
+    const stream = body => `<< /Length ${body.length} >>\nstream\n${body}\nendstream`;
+    const kids = [], allFields = [];
+    for (const pg of this.pages) {
+      const content = add(stream(pg.ops.join("\n")));
+      const pageN = reserve(); const annots = [];
+      for (const fd of pg.fields) {
+        // appearance stream so pre-filled text shows and prints in every viewer
+        const lead = fd.size * 1.15;
+        const maxLines = Math.max(1, Math.floor((fd.h - 2) / lead));
+        const lines = fd.value ? winAnsiWrap(fd.value, fd.size, fd.w - 4).slice(0, maxLines) : [];
+        const apBody = lines.length
+          ? `/Tx BMC q BT /Helv ${f2(fd.size)} Tf ${col3(rgb(fd.color))} rg 2 ${f2(fd.h - 1 - fd.size)} Td ` +
+            lines.map((l, i) => (i ? `0 ${f2(-lead)} Td ` : "") + `${pdfStr(l)} Tj`).join(" ") + " ET Q EMC"
+          : "/Tx BMC EMC";
+        const ap = add(`<< /Type /XObject /Subtype /Form /BBox [0 0 ${f2(fd.w)} ${f2(fd.h)}] /Resources << /Font << /Helv ${f1} 0 R >> >> /Length ${apBody.length} >>\nstream\n${apBody}\nendstream`);
+        const wN = add(`<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 4096 /F 4 /T ${pdfStr(winAnsi(fd.name))} /Rect [${f2(fd.x)} ${f2(fd.y)} ${f2(fd.x + fd.w)} ${f2(fd.y + fd.h)}] /P ${pageN} 0 R /DA ${pdfStr(`/Helv ${f2(fd.size)} Tf ${col3(rgb(fd.color))} rg`)} /V ${pdfStr(winAnsi(fd.value))} /MK << >> /AP << /N ${ap} 0 R >> >>`);
+        annots.push(wN); allFields.push(wN);
+      }
+      objs[pageN - 1] = `<< /Type /Page /Parent ${pagesN} 0 R /MediaBox [0 0 ${this.W} ${this.H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${fb} 0 R >> /XObject << /Im1 ${im} 0 R >> >> /Contents ${content} 0 R` + (annots.length ? ` /Annots [${annots.map(a => a + " 0 R").join(" ")}]` : "") + " >>";
+      kids.push(pageN);
+    }
+    objs[pagesN - 1] = `<< /Type /Pages /Kids [${kids.map(k => k + " 0 R").join(" ")}] /Count ${kids.length} >>`;
+    objs[catalogN - 1] = `<< /Type /Catalog /Pages ${pagesN} 0 R` + (allFields.length
+      ? ` /AcroForm << /Fields [${allFields.map(a => a + " 0 R").join(" ")}] /DR << /Font << /Helv ${f1} 0 R >> >> /DA (/Helv 0 Tf 0 g) >>` : "") + " >>";
+    let out = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n"; const offs = [];
+    objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(o => String(o).padStart(10, "0") + " 00000 n \n").join("");
+    out += `trailer\n<< /Size ${objs.length + 1} /Root ${catalogN} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+    const bytes = new Uint8Array(out.length);
+    for (let i = 0; i < out.length; i++) bytes[i] = out.charCodeAt(i) & 0xff;
+    return new Blob([bytes], { type: "application/pdf" });
+  }
+}
+/** wrap a JS string into WinAnsi binary lines that fit `width` at Helvetica `size` */
+function winAnsiWrap(text, size, width) {
+  const out = [];
+  for (const para of String(text || "").split("\n")) {
+    let cur = "";
+    for (const word of para.split(" ")) {
+      const t = cur ? cur + " " + word : word;
+      if (textWidth(t, false, size) <= width || !cur) cur = t; else { out.push(winAnsi(cur)); cur = word; }
+    }
+    out.push(winAnsi(cur));
+  }
+  return out.filter((l, i, a) => !(l === "" && a.length === 1));
+}
+function wrapText(text, bold, size, width) {
+  const out = [];
+  for (const para of String(text || "").split("\n")) {
+    let cur = "";
+    for (const word of para.split(" ")) {
+      const t = cur ? cur + " " + word : word;
+      if (textWidth(t, bold, size) <= width || !cur) cur = t; else { out.push(cur); cur = word; }
+    }
+    out.push(cur);
+  }
+  return out;
+}
+
+/* =====================================================================
+   PDF LAYOUT: page 1 Dispatch Sheet (fits on one page), page 2 RTS
+   ===================================================================== */
+function buildPdf(plan, ctx) {
+  const { day, lead, notes, extras } = ctx;
+  const pdf = new PdfDoc(); const W = pdf.W, H = pdf.H, M = 0.35 * 72;
+  const NAVY = "#131921", GREY = "#E5E7EB", BLUE = "#1E3A8A", TITLE = "#1F2A6B", RED = "#C00000";
+  function cell(x, y, w, h, text = "", o = {}) {
+    const { bold = false, size = 8, align = "c", bg = null, fg = "#000000", border = true } = o;
+    if (bg) pdf.rect(x, y, w, h, { fill: bg, stroke: null });
+    if (border) pdf.rect(x, y, w, h);
+    if (text !== "" && text !== null && text !== undefined) {
+      let s = String(text);
+      while (textWidth(s, bold, size) > w - 4 && s.length > 1) s = s.slice(0, -1);
+      const ty = y + (h - size) / 2 + 1.5;
+      pdf.text(align === "c" ? x + w / 2 : align === "l" ? x + 3 : x + w - 3, ty, s, { bold, size, color: fg, align });
+    }
+  }
+  const dateStr = `${String(day.getMonth() + 1).padStart(2, "0")}/${String(day.getDate()).padStart(2, "0")}/${day.getFullYear()}`;
+
+  /* ---------- Dispatch Sheet ---------- */
+  const widths = [70, 55, 62, 160, 80, 42, 65]; const totalW = widths.reduce((a, b) => a + b, 0);
+  const x0 = (W - totalW) / 2; const lw = widths[0] + widths[1] + 30;
+  const phoneRows = plan.flatMap(w => w.rows).filter(r => r.phone > 0);
+  const phoneTotal = phoneRows.reduce((a, r) => a + r.phone, 0);
+  const phoneText = phoneRows.map(r => `${r.driver || r.route} (${r.phone})`).join(", ");
+  const phoneLines = phoneText ? wrapText(phoneText, true, 8.5, totalW - 8) : [];
+  const noteLines = {}; CONFIG.NOTE_CATEGORIES.forEach(cat => {
+    noteLines[cat] = notes[cat] ? wrapText(notes[cat], false, 8, totalW - lw - 8).length : 1; });
+  const pageHeight = rh => { const k = rh / 14; let h = 62;
+    plan.forEach(w => h += (2 + w.rows.length) * rh + 10 * k);
+    h += rh + Math.max(30 * k, 12 * phoneLines.length + 8) + 14 * k;
+    h += 16 + CONFIG.NOTE_CATEGORIES.reduce((a, c) => a + Math.max(24 * k, 10 * noteLines[c] + 8), 0);
+    if (extras.length) h += 12 * k + 16 + Math.ceil(extras.length / 2) * 16 * k;
+    return h; };
+  let rh = 14; while (rh > 10 && pageHeight(rh) > H - 2 * M) rh -= 0.5;
+  const k = rh / 14, fs = rh >= 12 ? 8 : 7;
+
+  let y = H - M;
+  pdf.image(x0, y - 50, 102, 102 * LOGO_H / LOGO_W);
+  const cx = x0 + 110 + (totalW - 110) / 2;
+  pdf.text(cx, y - 18, "AMLO LOGISTICS LLC - DISPATCH SHEET", { bold: true, size: 15, color: TITLE, align: "c" });
+  pdf.text(cx, y - 36, `DATE: ${dateStr}   |   LEAD DRIVER: ${lead || "______________________"}`, { bold: true, size: 9, align: "c" });
+  y -= 62;
+  const need = sp => { if (y - sp < M) { pdf.addPage(); y = H - M; } };
+  const heads = ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "MGS", "EX PHONE"];
+  for (const w of plan) {
+    need(rh * 3);
+    cell(x0, y - rh, totalW, rh, "  " + w.title, { bold: true, size: fs + 0.5, align: "l", bg: NAVY, fg: "#FFFFFF", border: false }); y -= rh;
+    const head = () => { let x = x0; heads.forEach((h, i) => { cell(x, y - rh, widths[i], rh, h, { bold: true, size: fs, bg: GREY }); x += widths[i]; }); y -= rh; };
+    head();
+    for (const r of w.rows) {
+      if (y - rh < M) { pdf.addPage(); y = H - M; head(); }
+      const vals = [r.van, r.route, r.time || r.wave, r.driver, r.staging, r.mgs ? "X" : "NONE", r.phone || ""];
+      let x = x0;
+      vals.forEach((v, i) => { const red = /OVER/.test(String(v)) || (i === 0 && r.forced);
+        cell(x, y - rh, widths[i], rh, v, { bold: red, size: fs, align: i === 3 ? "l" : "c", fg: red ? RED : "#000000" }); x += widths[i]; });
+      y -= rh;
+    }
+    y -= 10 * k;
+  }
+  const boxH = Math.max(30 * k, 12 * phoneLines.length + 8);
+  need(boxH + rh + 14 * k);
+  cell(x0, y - rh, totalW, rh, "  DRIVERS WITH EXTRA PHONE" + (phoneTotal ? `  (TOTAL EXTRA PHONES: ${phoneTotal})` : ":"), { bold: true, size: 8.5, align: "l", bg: "#F3F4F6", border: false });
+  y -= rh; cell(x0, y - boxH, totalW, boxH);
+  phoneLines.forEach((ln, i) => pdf.text(x0 + 4, y - 13 - i * 12, ln, { bold: true, size: 8.5, color: BLUE }));
+  y -= boxH + 14 * k;
+
+  const noteH = {}; CONFIG.NOTE_CATEGORIES.forEach(c => noteH[c] = Math.max(24 * k, 10 * noteLines[c] + 8));
+  need(16 + Object.values(noteH).reduce((a, b) => a + b, 0));
+  cell(x0, y - 16, totalW, 16, "  DISPATCH OPERATIONAL NOTES & OBSERVATIONS", { bold: true, size: 9, align: "l", bg: NAVY, fg: "#FFFFFF", border: false });
+  y -= 16;
+  CONFIG.NOTE_CATEGORIES.forEach((cat, i) => {
+    const h = noteH[cat];
+    cell(x0, y - h, lw, h, cat, { bold: true, size: 7, align: "l", bg: "#F0F0F0" });
+    cell(x0 + lw, y - h, totalW - lw, h);
+    pdf.field({ name: `note_${i}`, x: x0 + lw + 1, y: y - h + 1, w: totalW - lw - 2, h: h - 2, value: notes[cat] || "", size: 8, color: BLUE });
+    y -= h;
+  });
+  if (extras.length) {
+    y -= 12 * k; const eh = 16 * k; const nRows = Math.ceil(extras.length / 2);
+    need(16 + nRows * eh);
+    cell(x0, y - 16, totalW, 16, `  EXTRA PEOPLE TODAY (${extras.length})`, { bold: true, size: 9, align: "l", bg: NAVY, fg: "#FFFFFF", border: false });
+    y -= 16; const half = totalW / 2;
+    for (let r = 0; r < nRows; r++) {
+      for (let j = 0; j < 2; j++) { const idx = r * 2 + j;
+        cell(x0 + j * half, y - eh, half, eh, idx < extras.length ? `${idx + 1}. ${extras[idx]}` : "", { bold: true, size: fs, align: "l", fg: BLUE }); }
+      y -= eh;
+    }
+  }
+
+  /* ---------- RTS ---------- */
+  pdf.addPage();
+  const rw = [58, 50, 140, 60, 52, 38]; const tw = rw.reduce((a, b) => a + b, 0);
+  const rx = M + 6; const sideX = rx + tw + 16; const rr = 17;
+  const rtsHead = () => {
+    const top = H - M;
+    pdf.text(rx, top - 16, `RTS - ${CONFIG.STATION}`, { bold: true, size: 15 });
+    pdf.text(rx + tw, top - 16, `${day.getMonth() + 1}/${day.getDate()}/${day.getFullYear()}`, { bold: true, size: 11, align: "r" });
+    const yy = top - 34; let x = rx;
+    ["VAN", "ROUTE", "DRIVER NAME", "EXP. RETURN", "RTS HOUR", "WB"].forEach((h, i) => { cell(x, yy - rr, rw[i], rr, h, { bold: true, size: 8, bg: "#DCDCDC" }); x += rw[i]; });
+    return [yy - rr, yy];
+  };
+  let tableTop; [y, tableTop] = rtsHead();
+  CONFIG.RTS_SIDE_LABELS.forEach((lab, i) => {
+    const ly = tableTop - 12 - i * 3 * rr;
+    pdf.text(sideX, ly, lab, { bold: true, size: 9 });
+    pdf.line(sideX, ly - 2 * rr + 6, W - M, ly - 2 * rr + 6);
+    pdf.line(sideX, ly - rr + 6, W - M, ly - rr + 6);
+    pdf.field({ name: `side_${i}`, x: sideX, y: ly - 2 * rr + 7, w: W - M - sideX, h: 2 * rr - 12, value: "", size: 8, color: BLUE });
+  });
+  const check = (x, y0, w, h) => { const cx2 = x + w / 2, cy = y0 + h / 2;
+    pdf.path([[cx2 - 3.5, cy], [cx2 - 1, cy - 3], [cx2 + 4, cy + 3.5]]); };
+  let daCount = 0;
+  for (const w of plan) {
+    if (w.special) { if (y - rr < M) { pdf.addPage(); [y] = rtsHead(); }
+      cell(rx, y - rr, tw, rr, w.title, { bold: true, size: 8.5, bg: "#E6E6E6" }); y -= rr; }
+    for (const r of w.rows) {
+      if (y - rr < M) { pdf.addPage(); [y] = rtsHead(); }
+      const vals = [r.van, r.route, r.driver, r.exp || "", "", ""]; let x = rx;
+      vals.forEach((v, i) => { cell(x, y - rr, rw[i], rr, v, { bold: i === 0, size: 8, align: i === 2 ? "l" : "c" });
+        if (i === 5 && r.mgs) check(x, y - rr, rw[i], rr); x += rw[i]; });
+      y -= rr; if (r.driver) daCount++;
+    }
+  }
+  const exRows = Math.max(3, extras.length);
+  if (y - rr * (exRows + 3) < M) { pdf.addPage(); [y] = rtsHead(); }
+  cell(rx, y - rr, tw, rr, "EXTRAS / EROS", { bold: true, size: 8.5, bg: "#E6E6E6" }); y -= rr;
+  for (let i = 0; i < exRows; i++) {
+    let x = rx; rw.forEach((wd, j) => { cell(x, y - rr, wd, rr, j === 2 && i < extras.length ? extras[i] : "", { size: 8, align: j === 2 ? "l" : "c", fg: BLUE }); x += wd; });
+    y -= rr;
+  }
+  pdf.text(rx + tw, y - 13, `Total DAs: ${daCount}`, { bold: true, size: 10, align: "r" });
+  y -= 34;
+  pdf.text(rx, y, "DRIVERS EXTRA PHONE:" + (phoneTotal ? `  (TOTAL: ${phoneTotal})` : ""), { bold: true, size: 9 });
+  if (phoneText) wrapText(phoneText, true, 8.5, tw).forEach((ln, i) => pdf.text(rx, y - 15 - i * 12, ln, { bold: true, size: 8.5, color: BLUE }));
+  else { pdf.line(rx, y - 16, rx + tw, y - 16); pdf.line(rx, y - 32, rx + tw, y - 32); }
+  return pdf.toBlob();
+}
+
+/* =====================================================================
+   MINIMAL XLSX WRITER (styles, merges, dropdowns, formulas, logo)
+   ===================================================================== */
+const CRC_TABLE = (() => { const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {            // files: [{name, data:Uint8Array}] -> Blob (no compression)
+  const enc = new TextEncoder(); const parts = []; const central = []; let offset = 0;
+  for (const f of files) {
+    const name = enc.encode(f.name); const crc = crc32(f.data); const size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, 0, true); lh.setUint16(12, 0x5021, true); lh.setUint32(14, crc, true);
+    lh.setUint32(18, size, true); lh.setUint32(22, size, true); lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true);
+    ch.setUint16(10, 0, true); ch.setUint16(12, 0, true); ch.setUint16(14, 0x5021, true); ch.setUint32(16, crc, true);
+    ch.setUint32(20, size, true); ch.setUint32(24, size, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  }
+  const cdSize = central.reduce((a, p) => a + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)],
+    { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+const esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "");
+function colLetter(c) { let s = ""; c++; while (c > 0) { const m = (c - 1) % 26; s = String.fromCharCode(65 + m) + s; c = Math.floor((c - 1) / 26); } return s; }
+function parseRef(ref) { const m = ref.match(/^([A-Z]+)(\d+)$/); return [parseInt(m[2], 10) - 1, colIndex(m[1])]; }
+
+class XStyles {
+  constructor() { this.fonts = ['<font><sz val="10"/><name val="Segoe UI"/></font>']; this.fills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'];
+    this.borders = ['<border><left/><right/><top/><bottom/><diagonal/></border>']; this.xfs = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>']; this.map = {}; }
+  idx(list, xml) { let i = list.indexOf(xml); if (i < 0) { list.push(xml); i = list.length - 1; } return i; }
+  get(st = {}) {
+    const key = JSON.stringify(st); if (this.map[key] !== undefined) return this.map[key];
+    const f = st.font || {};
+    const font = `<font>${f.b ? "<b/>" : ""}<sz val="${f.sz || 9}"/><color rgb="FF${f.color || "000000"}"/><name val="Segoe UI"/></font>`;
+    const fill = st.fill ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${st.fill}"/><bgColor indexed="64"/></patternFill></fill>` : null;
+    const side = (c) => `<left style="thin"><color rgb="FF${c}"/></left><right style="thin"><color rgb="FF${c}"/></right><top style="thin"><color rgb="FF${c}"/></top><bottom style="thin"><color rgb="FF${c}"/></bottom>`;
+    let border = null;
+    if (st.border === "box") border = `<border>${side("000000")}<diagonal/></border>`;
+    else if (st.border === "light") border = `<border>${side("C8C8C8")}<diagonal/></border>`;
+    else if (st.border === "under") border = `<border><left/><right/><top/><bottom style="thin"><color rgb="FF999999"/></bottom><diagonal/></border>`;
+    const fi = this.idx(this.fonts, font), fl = fill ? this.idx(this.fills, fill) : 0, bo = border ? this.idx(this.borders, border) : 0;
+    const a = st.align || {};
+    const al = `<alignment${a.h ? ` horizontal="${a.h}"` : ""} vertical="${a.v || "center"}"${a.wrap ? ' wrapText="1"' : ""}/>`;
+    this.xfs.push(`<xf numFmtId="0" fontId="${fi}" fillId="${fl}" borderId="${bo}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${al}</xf>`);
+    return (this.map[key] = this.xfs.length - 1);
+  }
+  xml() { return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">` +
+    `<fonts count="${this.fonts.length}">${this.fonts.join("")}</fonts><fills count="${this.fills.length}">${this.fills.join("")}</fills>` +
+    `<borders count="${this.borders.length}">${this.borders.join("")}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>` +
+    `<cellXfs count="${this.xfs.length}">${this.xfs.join("")}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`; }
+}
+class XSheet {
+  constructor(name, styles) { this.name = name; this.st = styles; this.cells = {}; this.merges = []; this.cols = {}; this.heights = {}; this.dv = []; this.printArea = null; this.logo = false; }
+  set(ref, v, style) { const [r, c] = parseRef(ref); const o = this.cells[r + "," + c] || (this.cells[r + "," + c] = { r, c });
+    if (v !== undefined) o.v = v; if (style) o.s = this.st.get(style); return o; }
+  formula(ref, f, style, array = false) { const o = this.set(ref, undefined, style); o.f = f.replace(/^=/, ""); o.arr = array; }
+  styleRange(rng, style) { const [a, b] = rng.split(":"); const [r1, c1] = parseRef(a), [r2, c2] = parseRef(b || a);
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) this.set(colLetter(c) + (r + 1), undefined, style); }
+  merge(rng) { this.merges.push(rng); }
+  width(col, w) { this.cols[colIndex(col)] = w; }
+  height(row, h) { this.heights[row - 1] = h; }
+  list(sqref, formula1) { this.dv.push({ sqref, formula1 }); }
+  xml() {
+    const rows = {}; Object.values(this.cells).forEach(c => (rows[c.r] = rows[c.r] || []).push(c));
+    Object.keys(this.heights).forEach(r => rows[r] = rows[r] || []);
+    const rowXml = Object.keys(rows).map(Number).sort((a, b) => a - b).map(r => {
+      const cs = rows[r].sort((a, b) => a.c - b.c).map(c => {
+        const ref = colLetter(c.c) + (c.r + 1); const s = c.s ? ` s="${c.s}"` : "";
+        if (c.f !== undefined) return `<c r="${ref}"${s} t="str">${c.arr ? `<f t="array" ref="${ref}">` : "<f>"}${esc(c.f)}</f></c>`;
+        if (c.v === undefined || c.v === null || c.v === "") return `<c r="${ref}"${s}/>`;
+        if (typeof c.v === "number") return `<c r="${ref}"${s}><v>${c.v}</v></c>`;
+        return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${esc(c.v)}</t></is></c>`;
+      }).join("");
+      const ht = this.heights[r] ? ` ht="${this.heights[r]}" customHeight="1"` : "";
+      return `<row r="${r + 1}"${ht}>${cs}</row>`;
+    }).join("");
+    const cols = Object.keys(this.cols).map(Number).sort((a, b) => a - b).map(c => `<col min="${c + 1}" max="${c + 1}" width="${this.cols[c]}" customWidth="1"/>`).join("");
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/>` +
+      (cols ? `<cols>${cols}</cols>` : "") + `<sheetData>${rowXml}</sheetData>` +
+      (this.merges.length ? `<mergeCells count="${this.merges.length}">${this.merges.map(m => `<mergeCell ref="${m}"/>`).join("")}</mergeCells>` : "") +
+      (this.dv.length ? `<dataValidations count="${this.dv.length}">${this.dv.map(d => `<dataValidation type="list" allowBlank="1" showErrorMessage="${d.strict === false ? 0 : 1}" sqref="${d.sqref}"><formula1>${esc(d.formula1)}</formula1></dataValidation>`).join("")}</dataValidations>` : "") +
+      `<pageMargins left="0.25" right="0.25" top="0.4" bottom="0.4" header="0.2" footer="0.2"/><pageSetup paperSize="1" orientation="portrait" fitToWidth="1" fitToHeight="0"/>` +
+      (this.logo ? `<drawing r:id="rId1"/>` : "") + `</worksheet>`;
+  }
+}
+function buildXlsxBlob(sheets, styles) {
+  const enc = new TextEncoder(); const files = []; const add = (name, s) => files.push({ name, data: typeof s === "string" ? enc.encode(s) : s });
+  const hasLogo = sheets.some(s => s.logo);
+  add("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
+    sheets.map((s, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("") +
+    (hasLogo ? `<Override PartName="/xl/drawings/drawing1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>` : "") + `</Types>`);
+  add("_rels/.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`);
+  const defined = sheets.map((s, i) => s.printArea ? `<definedName name="_xlnm.Print_Area" localSheetId="${i}">'${s.name}'!${s.printArea}</definedName>` : "").join("");
+  add("xl/workbook.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>` +
+    sheets.map((s, i) => `<sheet name="${esc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("") + `</sheets>` + (defined ? `<definedNames>${defined}</definedNames>` : "") + `<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`);
+  add("xl/_rels/workbook.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+    sheets.map((s, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join("") +
+    `<Relationship Id="rId${sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`);
+  add("xl/styles.xml", styles.xml());
+  sheets.forEach((s, i) => {
+    add(`xl/worksheets/sheet${i + 1}.xml`, s.xml());
+    if (s.logo) {
+      add(`xl/worksheets/_rels/sheet${i + 1}.xml.rels`, `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/drawing" Target="../drawings/drawing1.xml"/></Relationships>`);
+    }
+  });
+  if (hasLogo) {
+    const cx = 150 * 9525, cy = Math.round(150 * LOGO_H / LOGO_W) * 9525;
+    add("xl/drawings/drawing1.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><xdr:oneCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>38100</xdr:colOff><xdr:row>0</xdr:row><xdr:rowOff>19050</xdr:rowOff></xdr:from><xdr:ext cx="${cx}" cy="${cy}"/><xdr:pic><xdr:nvPicPr><xdr:cNvPr id="2" name="Logo"/><xdr:cNvPicPr><a:picLocks noChangeAspect="1"/></xdr:cNvPicPr></xdr:nvPicPr><xdr:blipFill><a:blip r:embed="rId1"/><a:stretch><a:fillRect/></a:stretch></xdr:blipFill><xdr:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${cx}" cy="${cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></xdr:spPr></xdr:pic><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>`);
+    add("xl/drawings/_rels/drawing1.xml.rels", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.jpeg"/></Relationships>`);
+    const bin = atob(LOGO_B64); const u8 = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    add("xl/media/image1.jpeg", u8);
+  }
+  return zipStore(files);
+}
+
+/* =====================================================================
+   EXCEL LAYOUT: Dispatch Sheet, RTS Sheet (linked), Fleet Status
+   ===================================================================== */
+function buildXlsx(plan, ctx) {
+  const { day, lead, notes, extras, usable, unusable } = ctx;
+  const S = new XStyles(); const d = new XSheet("Dispatch Sheet", S), r = new XSheet("RTS Sheet", S), f = new XSheet("Fleet Status", S);
+  const NAVY = "131921", GREY = "E5E7EB", BLUE = "1E3A8A";
+  const font = (sz = 9, b = false, color = "000000") => ({ sz, b, color });
+  const C = { h: "center" }, L = { h: "left" };
+  const rows = plan.flatMap(w => w.rows);
+  const allVans = [...new Set([...rows.map(x => x.van).filter(v => !/OVER/.test(v)), ...usable.map(v => v.name)])].sort(naturalCmp);
+  const drivers = [...new Set(rows.map(x => x.driver).filter(Boolean))].sort();
+
+  /* ---- Dispatch ---- */
+  "ABCDEFG".split("").forEach((c, i) => d.width(c, [14, 12, 12, 30, 16, 8, 12][i]));
+  d.logo = true; d.merge("A1:B2");
+  d.merge("C1:G1"); d.set("C1", "AMLO LOGISTICS LLC - DISPATCH SHEET", { font: font(14, true, "1F2A6B"), align: C });
+  d.merge("C2:D2"); d.set("C2", `DATE: ${String(day.getMonth() + 1).padStart(2, "0")}/${String(day.getDate()).padStart(2, "0")}/${day.getFullYear()}  |  LEAD DRIVER:`, { font: font(9, true), align: { h: "right" } });
+  d.set("E2", lead || "NONE", { font: font(9, true), align: L });
+  d.list("E2", '"' + ["NONE", ...CONFIG.LEAD_DRIVERS].join(",") + '"');
+  d.height(1, 30); d.height(2, 26);
+  let row = 4; const links = []; let first = null;
+  const vanCells = [], xCells = [], phoneCells = [];
+  for (const w of plan) {
+    d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(9.5, true, "FFFFFF") });
+    d.set(`A${row}`, "  " + w.title, { fill: NAVY, font: font(9.5, true, "FFFFFF") }); row++;
+    ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "MGS", "EX PHONE"].forEach((h, i) =>
+      d.set(colLetter(i) + row, h, { font: font(9, true), fill: GREY, align: C, border: "box" })); row++;
+    if (w.special) links.push({ title: w.title });
+    for (const x of w.rows) {
+      first = first || row;
+      const vals = [x.van, x.route, x.time || x.wave, x.driver, x.staging, x.mgs ? "X" : "NONE", x.phone || "NONE"];
+      vals.forEach((v, i) => { const red = /OVER/.test(String(v)) || (i === 0 && x.forced);
+        d.set(colLetter(i) + row, v, { font: font(9, red, red ? "C00000" : "000000"), align: i === 3 ? L : C, border: "box" }); });
+      vanCells.push("A" + row); xCells.push("F" + row); phoneCells.push("G" + row);
+      links.push({ row, x }); row++;
+    }
+    row++;
+  }
+  const last = row - 2;
+  d.list(vanCells.join(" "), `'Fleet Status'!$H$2:$H$${allVans.length + 1}`);
+  d.list(xCells.join(" "), '"X,NONE"');
+  d.list(phoneCells.join(" "), '"' + ["NONE", ...Array.from({ length: CONFIG.MAX_EXTRA_PHONES }, (_, i) => i + 1)].join(",") + '"');
+  const rngG = `G${first}:G${last}`, rngD = `D${first}:D${last}`;
+  d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: "F3F4F6", font: font(9, true) });
+  d.formula(`A${row}`, `="  DRIVERS WITH EXTRA PHONE  (TOTAL EXTRA PHONES: "&SUM(IFERROR(--${rngG},0))&")"`, { fill: "F3F4F6", font: font(9, true) }, true);
+  row++;
+  d.merge(`A${row}:G${row + 1}`); d.styleRange(`A${row}:G${row + 1}`, { border: "box", font: font(10, true, BLUE), align: { h: "left", wrap: true } });
+  d.formula(`A${row}`, `=_xlfn.TEXTJOIN(", ",TRUE,IF(IFERROR(--${rngG},0)>0,${rngD}&" ("&${rngG}&")",""))`, { border: "box", font: font(10, true, BLUE), align: { h: "left", wrap: true } }, true);
+  const phoneCell = `A${row}`; row += 3;
+  d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
+  d.set(`A${row}`, "  DISPATCH OPERATIONAL NOTES & OBSERVATIONS", { fill: NAVY, font: font(10, true, "FFFFFF") }); d.height(row, 20); row++;
+  for (const cat of CONFIG.NOTE_CATEGORIES) {
+    d.merge(`A${row}:B${row}`); d.merge(`C${row}:G${row}`);
+    d.styleRange(`A${row}:B${row}`, { fill: "F0F0F0", border: "light", font: font(8.5, true), align: { h: "left", wrap: true } });
+    d.styleRange(`C${row}:G${row}`, { border: "light", font: font(9, false, BLUE), align: { h: "left", wrap: true } });
+    d.set(`A${row}`, cat); const txt = notes[cat] || ""; d.set(`C${row}`, txt);
+    const lines = txt ? txt.split("\n").reduce((a, p) => a + Math.max(1, Math.ceil(p.length / 70)), 0) : 1;
+    d.height(row, Math.max(24, 13 * lines + 6)); row++;
+  }
+  if (extras.length) {
+    row++; d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
+    d.set(`A${row}`, `  EXTRA PEOPLE TODAY (${extras.length})`); d.height(row, 20); row++;
+    for (let i = 0; i < extras.length; i += 2) {
+      d.merge(`A${row}:C${row}`); d.merge(`D${row}:G${row}`);
+      d.styleRange(`A${row}:G${row}`, { border: "light", font: font(9, true, BLUE), align: L });
+      d.set(`A${row}`, `${i + 1}. ${extras[i]}`); if (i + 1 < extras.length) d.set(`D${row}`, `${i + 2}. ${extras[i + 1]}`);
+      d.height(row, 18); row++;
+    }
+  }
+  d.printArea = `$A$1:$G$${row}`;
+
+  /* ---- RTS ---- */
+  "ABCDEFGH".split("").forEach((c, i) => r.width(c, [12.8, 10.8, 26, 12, 10, 7, 3, 28][i]));
+  r.set("A1", `RTS - ${CONFIG.STATION}`, { font: font(14, true) });
+  r.set("F1", `${day.getMonth() + 1}/${day.getDate()}/${day.getFullYear()}`, { font: font(11, true), align: { h: "right" } });
+  ["VAN", "ROUTE", "DRIVER NAME", "EXP. RETURN", "RTS HOUR", "WB"].forEach((h, i) => r.set(colLetter(i) + 3, h, { font: font(9.5, true), fill: "DCDCDC", align: C, border: "box" }));
+  let rr = 4; const start = rr; const ref = "'Dispatch Sheet'!";
+  for (const l of links) {
+    if (l.title) { r.merge(`A${rr}:F${rr}`); r.styleRange(`A${rr}:F${rr}`, { fill: "E6E6E6", font: font(9, true), align: C }); r.set(`A${rr}`, l.title); }
+    else {
+      r.formula(`A${rr}`, `=${ref}A${l.row}`, { font: font(9, true), align: C, border: "box" });
+      r.formula(`B${rr}`, `=${ref}B${l.row}`, { font: font(9), align: C, border: "box" });
+      r.formula(`C${rr}`, `=${ref}D${l.row}`, { font: font(9), align: L, border: "box" });
+      r.set(`D${rr}`, l.x.exp || "", { font: font(9), align: C, border: "box" });
+      r.set(`E${rr}`, "", { font: font(9), align: C, border: "box" });
+      r.formula(`F${rr}`, `=IF(${ref}F${l.row}="X","✓","")`, { font: font(9), align: C, border: "box" });
+    }
+    r.height(rr, 18); rr++;
+  }
+  const lastRoute = rr - 1;
+  r.merge(`A${rr}:F${rr}`); r.styleRange(`A${rr}:F${rr}`, { fill: "E6E6E6", font: font(9, true), align: C }); r.set(`A${rr}`, "EXTRAS / EROS"); rr++;
+  for (let i = 0; i < Math.max(3, extras.length); i++) {
+    r.styleRange(`A${rr}:F${rr}`, { border: "box", font: font(9, false, BLUE), align: C });
+    if (i < extras.length) r.set(`C${rr}`, extras[i], { border: "box", font: font(9, false, BLUE), align: L });
+    r.height(rr, 18); rr++;
+  }
+  r.merge(`D${rr}:F${rr}`);
+  r.formula(`D${rr}`, `="Total DAs: "&SUMPRODUCT(--(LEN(C${start}:C${lastRoute})>0))`, { font: font(10, true), align: { h: "right" } });
+  rr += 2; r.set(`A${rr}`, "DRIVERS EXTRA PHONE:", { font: font(9, true) }); rr++;
+  r.merge(`A${rr}:F${rr + 1}`); r.formula(`A${rr}`, `=${ref}${phoneCell}`, { font: font(9, true, BLUE), align: { h: "left", v: "top", wrap: true } });
+  const sideCells = [];
+  CONFIG.RTS_SIDE_LABELS.forEach((lab, i) => { const t = 3 + i * 3; r.set(`H${t}`, lab, { font: font(9, true) });
+    [1, 2].forEach(k => { r.set(`H${t + k}`, "", { border: "under", font: font(9, false, BLUE) }); sideCells.push(`H${t + k}`); }); });
+  if (drivers.length) r.dv.push({ sqref: sideCells.join(" "), formula1: `'Fleet Status'!$J$2:$J$${drivers.length + 1}`, strict: false });
+  r.printArea = `$A$1:$H$${rr + 1}`;
+
+  /* ---- Fleet Status ---- */
+  "ABCDEFGHIJ".split("").forEach((c, i) => f.width(c, [12, 42, 10, 14, 20, 3, 3, 26, 3, 32][i]));
+  ["VAN", "SERVICE TYPE", "STATUS", "OPERATIONAL", "ASSIGNED TO ROUTE"].forEach((h, i) => f.set(colLetter(i) + 1, h, { font: font(9, true, "FFFFFF"), fill: NAVY, border: "box" }));
+  const vmap = Object.fromEntries(usable.map(v => [v.name, v])); const used = new Set(); let fr = 2;
+  for (const x of rows) { const v = vmap[x.van]; used.add(x.van);
+    [x.van, v ? v.service_type : "", v ? "ACTIVE" : "", v ? "OPERATIONAL" : "", x.route].forEach((val, i) => f.set(colLetter(i) + fr, val, { font: font(9), border: "box" })); fr++; }
+  for (const v of usable.filter(v => !used.has(v.name))) { [v.name, v.service_type, v.status, v.ops, "SPARE"].forEach((val, i) => f.set(colLetter(i) + fr, val, { font: font(9), border: "box" })); fr++; }
+  for (const v of unusable) { [v.name, v.service_type, v.status, v.ops, "NOT USABLE"].forEach((val, i) => f.set(colLetter(i) + fr, val, { font: font(9, false, "C00000"), border: "box" })); fr++; }
+  f.set("H1", "VAN LIST (dropdown source)", { font: font(9, true) }); allVans.forEach((v, i) => f.set("H" + (i + 2), v, { font: font(9) }));
+  f.set("J1", "DRIVER LIST (dropdown source)", { font: font(9, true) }); drivers.forEach((v, i) => f.set("J" + (i + 2), v, { font: font(9) }));
+  return buildXlsxBlob([d, r, f], S);
+}
+
+/* =====================================================================
+   PAGE
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+const S = { routesWb: null, vehWb: null, routesName: "", vehName: "", problem: null, usable: [], unusable: [],
+  plan: [], defaults: null, pomp: [], pompOn: false, extras: ["", "", ""], extrasOn: false, notes: {}, force: false, example: false };
+CONFIG.NOTE_CATEGORIES.forEach(c => S.notes[c] = "");
+
+function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }
+
+/* ---------- step 1: files ---------- */
+function todayISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
+$("in-date").value = todayISO();
+$("dl-lead").innerHTML = CONFIG.LEAD_DRIVERS.map(n => `<option value="${esc(n)}">`).join("");
+$("in-lead").value = lsGet("amlo-lead") || "";
+$("in-lead").addEventListener("change", () => lsSet("amlo-lead", $("in-lead").value));
+
+function showLoadMsg(t) { $("load-msg").textContent = t || ""; $("load-msg").hidden = !t; }
+async function handleFile(kind, file) {
+  const out = kind === "routes" ? $("f-routes") : $("f-veh");
+  out.classList.remove("err"); out.textContent = "Reading " + file.name + "…";
+  try {
+    const wb = await openWorkbook(await file.arrayBuffer());
+    if (kind === "routes") { S.routesWb = wb; S.routesName = file.name; } else { S.vehWb = wb; S.vehName = file.name; }
+    out.textContent = "✓ " + file.name; showLoadMsg("");
+    S.example = false;
+    await tryBuild();
+  } catch (e) { out.classList.add("err"); out.textContent = file.name + ": " + e.message; }
+}
+for (const [kind, inId, dropId] of [["routes", "in-routes", "drop-routes"], ["veh", "in-veh", "drop-veh"]]) {
+  $(inId).addEventListener("change", e => e.target.files[0] && handleFile(kind, e.target.files[0]));
+  const dz = $(dropId);
+  dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+  dz.addEventListener("drop", e => { e.preventDefault(); dz.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) handleFile(kind, f); });
+}
+async function tryBuild() {
+  if (!S.routesWb || !S.vehWb) return;
+  let routes, veh;
+  try {
+    const rr = await readRoutes(S.routesWb); routes = rr.routes; S.problem = rr.problem;
+  } catch (e) { $("f-routes").classList.add("err"); $("f-routes").textContent = S.routesName + ": " + e.message; return; }
+  try { veh = await readVehicles(S.vehWb); }
+  catch (e) { $("f-veh").classList.add("err"); $("f-veh").textContent = S.vehName + ": " + e.message; return; }
+  start(routes, veh);
+}
+function start(routes, veh) {
+  S.usable = veh.usable; S.unusable = veh.unusable;
+  S.plan = buildPlan(routes, S.usable);
+  S.defaults = JSON.stringify(S.plan);
+  S.pomp = []; S.force = false; $("chk-force").checked = false;
+  $("work").hidden = false; $("actions").hidden = false;
+  renderAll();
+}
+
+/* ---------- helpers on rows ---------- */
+const allRows = () => [...S.plan.flatMap(w => w.rows), ...(S.pompOn ? S.pomp : [])];
+const vmap = () => Object.fromEntries(S.usable.map(v => [v.name, v]));
+function holder(name, skipId) { return allRows().find(r => r.id !== skipId && r.van === name) || null; }
+function vanEv(name) { const v = vmap()[name]; return v ? isElectric(v.service_type) : null; }
+function rowStatus(r) {
+  if (/OVER/.test(r.van) || !r.van) return ["novan", "NO VAN"];
+  if (!vmap()[r.van]) return ["manual", "MANUAL"];
+  if (vanEv(r.van) !== isElectric(r.service_type)) return ["forced", "FORCED"];
+  return [null, ""];
+}
+
+/* ---------- step 2: routes table ---------- */
+function vanOptions(r) {
+  let names = S.usable.map(v => v.name);
+  if (!S.force) names = names.filter(n => vanEv(n) === isElectric(r.service_type));
+  if (r.van && !names.includes(r.van)) names.unshift(r.van);
+  return names.map(n => { const h = n === r.van ? null : holder(n, r.id);
+    const tag = n === r.van ? "" : h ? `  (swap with ${h.route || "Pompano"})` : "  (spare)";
+    return `<option value="${esc(n)}"${n === r.van ? " selected" : ""}>${esc(n + tag)}</option>`; }).join("");
+}
+function renderRoutes() {
+  const tb = $("tb-routes"); let html = "";
+  for (const w of S.plan) {
+    html += `<tr class="wave"><td colspan="9">${esc(w.title)}</td></tr>`;
+    for (const r of w.rows) {
+      const [cls, lab] = rowStatus(r);
+      html += `<tr data-id="${r.id}">
+        <td><input type="checkbox" id="mgs-${r.id}" data-k="mgs" ${r.mgs ? "checked" : ""} aria-label="MagSafe ${esc(r.route)}"></td>
+        <td><select id="van-${r.id}" data-k="van" aria-label="Van for ${esc(r.route)}">${vanOptions(r)}</select></td>
+        <td>${cls ? `<span class="tag ${cls}">${lab}</span>` : ""}</td>
+        <td class="code">${esc(r.route)}</td>
+        <td class="type">${isElectric(r.service_type) ? "EV" : "GAS"}</td>
+        <td><input class="drv" type="text" id="drv-${r.id}" data-k="driver" value="${esc(r.driver)}" placeholder="No name"></td>
+        <td class="code">${esc(r.staging)}</td>
+        <td class="ret">${esc(r.exp || "")}</td>
+        <td><input class="num" type="number" min="0" max="${CONFIG.MAX_EXTRA_PHONES}" step="1" id="ph-${r.id}" data-k="phone" value="${r.phone}"></td></tr>`;
+    }
+  }
+  tb.innerHTML = html;
+}
+function findRow(id) { return allRows().find(r => r.id === id) || S.pomp.find(r => r.id === id); }
+function onRowInput(e) {
+  const tr = e.target.closest("tr[data-id]"); if (!tr) return;
+  const r = findRow(+tr.dataset.id); const k = e.target.dataset.k; if (!r || !k) return;
+  if (k === "mgs") r.mgs = e.target.checked;
+  else if (k === "phone") { let n = parseInt(e.target.value, 10); if (isNaN(n) || n < 0) n = 0; if (n > CONFIG.MAX_EXTRA_PHONES) n = CONFIG.MAX_EXTRA_PHONES;
+    r.phone = n; if (e.type === "change") e.target.value = n; }
+  else if (k === "driver") r.driver = e.target.value.replace(/\s+/g, " ").trimStart();
+  else if (k === "van" && e.type === "change") { pickVanFor(r, e.target.value); return; }
+  else if (k === "pvan") { r.van = vanDisplayName(e.target.value).toUpperCase().replace(/^EDV(\d)/, "EDV $1"); const v = vmap()[r.van];
+    r.service_type = v ? v.service_type : "Standard Parcel Electric - Rivian MEDIUM"; }
+  else if (["route", "time", "staging"].includes(k)) r[k] = k === "route" || k === "staging" ? e.target.value.toUpperCase().replace("STG.", "").trim() : e.target.value.trim();
+  else if (k === "dur") r.dur = Number(e.target.value) || 0;
+  if (k === "time" || k === "dur") { r.exp = expectedReturn(r.time, r.dur); const c = tr.querySelector(".ret"); if (c) c.textContent = r.exp; }
+  updateCounts(); renderChecks();
+}
+function pickVanFor(r, name) {
+  const old = r.van; if (name === old) return;
+  const other = holder(name, r.id);
+  if (other) {
+    if (!/OVER/.test(old) && old && !S.force && other.service_type && vanEv(old) !== isElectric(other.service_type)) {
+      flash(`${old} can't go on ${other.route} (different van type). Tick "Allow any van" to force it.`);
+      renderRoutes(); return;
+    }
+    other.van = old && !/OVER/.test(old) ? old : (isElectric(other.service_type) ? "EDV OVER" : "GAS OVER");
+  }
+  r.van = name; renderRoutes(); if (other && other.manual) renderPomp(); else refreshVanList(); updateCounts(); renderChecks(); renderSummary();
+}
+let flashTimer;
+function flash(t) { const m = $("act-stat"); m.textContent = t; m.style.color = "var(--bad)"; clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { m.style.color = ""; updateCounts(); }, 5000); }
+$("tb-routes").addEventListener("input", onRowInput); $("tb-routes").addEventListener("change", onRowInput);
+$("chk-force").addEventListener("change", e => { S.force = e.target.checked; renderRoutes(); });
+$("btn-allmgs").addEventListener("click", () => { S.plan.forEach(w => w.rows.forEach(r => r.mgs = true)); renderRoutes(); updateCounts(); });
+$("btn-nomgs").addEventListener("click", () => { S.plan.forEach(w => w.rows.forEach(r => r.mgs = false)); renderRoutes(); updateCounts(); });
+$("btn-reset").addEventListener("click", () => { S.plan = JSON.parse(S.defaults); S.force = false; $("chk-force").checked = false; renderAll(); });
+
+/* ---------- step 3: Pompano ---------- */
+function yn(id, on) { $(id).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String((b.dataset.v === "1") === on))); }
+$("yn-pomp").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  S.pompOn = b.dataset.v === "1"; yn("yn-pomp", S.pompOn); $("pomp-box").hidden = !S.pompOn;
+  if (S.pompOn && !S.pomp.length) { addPomp(); addPomp(); } renderPomp(); renderRoutes(); updateCounts(); renderChecks(); renderSummary(); });
+function addPomp() {
+  const before = S.plan.flatMap(w => w.rows).length + S.pomp.length;
+  S.pomp.push({ id: ++ROWID, van: "", route: "", time: "DMF3", wave: "DMF3", driver: "", staging: "", dur: 0, exp: "",
+    service_type: "Standard Parcel Electric - Rivian MEDIUM", mgs: before < CONFIG.MAGSAFE_COUNT, phone: 0, manual: true });
+}
+$("btn-addpomp").addEventListener("click", () => { addPomp(); renderPomp(); });
+function renderPomp() {
+  refreshVanList();
+  $("tb-pomp").innerHTML = S.pomp.map(r => `<tr data-id="${r.id}">
+    <td><input type="checkbox" id="mgs-${r.id}" data-k="mgs" ${r.mgs ? "checked" : ""} aria-label="MagSafe"></td>
+    <td><input class="sm" type="text" id="pv-${r.id}" data-k="pvan" list="dl-vans" value="${esc(r.van)}" placeholder="EDV 30"></td>
+    <td><input class="sm" type="text" id="pr-${r.id}" data-k="route" value="${esc(r.route)}" placeholder="CX121" style="width:80px"></td>
+    <td><input class="sm" type="text" id="pt-${r.id}" data-k="time" value="${esc(r.time)}" placeholder="11:30 AM" style="width:86px"></td>
+    <td><input class="drv" type="text" id="pd-${r.id}" data-k="driver" value="${esc(r.driver)}" placeholder="Driver name"></td>
+    <td><input class="sm" type="text" id="ps-${r.id}" data-k="staging" value="${esc(r.staging)}" placeholder="D.12" style="width:76px"></td>
+    <td><input class="num" type="number" min="0" id="pdur-${r.id}" data-k="dur" value="${r.dur || ""}" placeholder="min" style="width:72px"></td>
+    <td class="ret">${esc(r.exp || "")}</td>
+    <td><input class="num" type="number" min="0" max="${CONFIG.MAX_EXTRA_PHONES}" id="pph-${r.id}" data-k="phone" value="${r.phone}"></td>
+    <td><button class="small" type="button" data-del="${r.id}" aria-label="Remove route">✕</button></td></tr>`).join("");
+}
+$("tb-pomp").addEventListener("input", onRowInput); $("tb-pomp").addEventListener("change", e => { onRowInput(e); if (e.target.dataset.k === "pvan") { renderRoutes(); refreshVanList(); renderSummary(); } });
+function refreshVanList() { const used = new Set(allRows().map(r => r.van));
+  $("dl-vans").innerHTML = S.usable.filter(v => !used.has(v.name)).map(v => `<option value="${esc(v.name)}">`).join(""); }
+$("tb-pomp").addEventListener("click", e => { const b = e.target.closest("[data-del]"); if (!b) return;
+  S.pomp = S.pomp.filter(r => r.id !== +b.dataset.del); renderPomp(); renderRoutes(); updateCounts(); renderChecks(); });
+
+/* ---------- step 4: extras ---------- */
+$("yn-extra").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+  S.extrasOn = b.dataset.v === "1"; yn("yn-extra", S.extrasOn); $("extra-box").hidden = !S.extrasOn; renderExtras(); renderChecks(); });
+function renderExtras() {
+  $("extras").innerHTML = S.extras.map((n, i) => `<label for="ex-${i}">${String(i + 1).padStart(2, "0")}<input type="text" id="ex-${i}" data-i="${i}" value="${esc(n)}" placeholder="Name"></label>`).join("");
+}
+$("extras").addEventListener("input", e => { const i = e.target.dataset.i; if (i !== undefined) { S.extras[+i] = e.target.value; renderChecks(); } });
+$("extras").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); S.extras.push(""); renderExtras(); $("ex-" + (S.extras.length - 1)).focus(); } });
+$("btn-addextra").addEventListener("click", () => { S.extras.push(""); renderExtras(); $("ex-" + (S.extras.length - 1)).focus(); });
+const extrasList = () => S.extrasOn ? S.extras.map(n => n.replace(/\s+/g, " ").trim()).filter(Boolean) : [];
+
+/* ---------- step 5: notes ---------- */
+function renderNotes() {
+  $("notes").innerHTML = CONFIG.NOTE_CATEGORIES.map((c, i) => `<label class="lab" for="note-${i}">${esc(c.replace(/:$/, ""))}</label><textarea id="note-${i}" data-c="${esc(c)}" rows="2">${esc(S.notes[c])}</textarea>`).join("");
+}
+$("notes").addEventListener("input", e => { if (e.target.dataset.c) S.notes[e.target.dataset.c] = e.target.value; });
+
+/* ---------- summary, counts, checks ---------- */
+function renderSummary() {
+  const n = S.plan.reduce((a, w) => a + w.rows.length, 0) + (S.pompOn ? S.pomp.filter(r => r.route || r.driver || r.van).length : 0);
+  const used = new Set(allRows().map(r => r.van)); const spare = S.usable.filter(v => !used.has(v.name)).length;
+  $("summary").innerHTML = (S.example ? `<span class="example">EXAMPLE DATA</span>` : "") +
+    `<span class="chip">Routes <b>${n}</b></span><span class="chip">Waves <b>${esc(S.plan.map(w => w.wave).join(" · "))}</b></span>` +
+    `<span class="chip ok">Usable vans <b>${S.usable.length}</b></span><span class="chip">Spare <b>${spare}</b></span>` +
+    (S.unusable.length ? `<span class="chip bad">Not usable: ${esc(S.unusable.map(v => v.name).join(", "))}</span>` : "");
+}
+function updateCounts() {
+  const rows = allRows(); const mg = rows.filter(r => r.mgs).length; const ph = rows.reduce((a, r) => a + (r.phone || 0), 0);
+  $("counts").textContent = `MagSafe: ${mg} of ${rows.length}   ·   Extra phones: ${ph}`;
+  $("act-stat").textContent = `${rows.length} routes · ${mg} MagSafe · ${ph} extra phones` + (S.example ? " · example data" : "");
+}
+function pompRows() { return S.pompOn ? S.pomp.filter(r => r.route || r.driver || r.van) : []; }
+function problems() {
+  const out = [];
+  if (S.problem) out.push(["bad", S.problem]);
+  const rows = [...S.plan.flatMap(w => w.rows), ...pompRows()];
+  const over = rows.filter(r => /OVER/.test(r.van) || !r.van); if (over.length) out.push(["bad", `No van on: ${over.map(r => r.route || "Pompano row").join(", ")}`]);
+  const noName = rows.filter(r => !clean(r.driver)); if (noName.length && !S.problem) out.push(["warn", `No driver name on: ${noName.map(r => r.route || "Pompano row").join(", ")}`]);
+  const forced = rows.filter(r => rowStatus(r)[0] === "forced"); if (forced.length) out.push(["warn", `Van type forced on: ${forced.map(r => `${r.route} (${r.van})`).join(", ")}`]);
+  const cnt = {}; rows.forEach(r => { if (r.van && !/OVER/.test(r.van)) cnt[r.van] = (cnt[r.van] || 0) + 1; });
+  const dup = Object.keys(cnt).filter(v => cnt[v] > 1); if (dup.length) out.push(["bad", `Van used twice: ${dup.join(", ")}`]);
+  const badPomp = pompRows().filter(r => !r.route); if (badPomp.length) out.push(["warn", "A Pompano row has no route code."]);
+  const noRet = S.plan.flatMap(w => w.rows).filter(r => !r.exp); if (noRet.length) out.push(["warn", `No expected return (missing route duration) on: ${noRet.map(r => r.route).join(", ")}`]);
+  return out;
+}
+function renderChecks() {
+  const p = problems();
+  $("checks").innerHTML = p.length ? p.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("") : `<li class="ok">Everything looks right. Ready to print.</li>`;
+}
+function renderAll() { renderSummary(); renderRoutes(); renderPomp(); renderExtras(); renderNotes(); updateCounts(); renderChecks(); }
+
+/* ---------- output ---------- */
+function finalPlan() {
+  const plan = JSON.parse(JSON.stringify(S.plan));
+  const pr = pompRows().map(r => ({ ...r, driver: clean(r.driver) }));
+  if (pr.length) {
+    let w = plan.find(x => x.wave.toUpperCase() === "DMF3");
+    if (!w) { w = { wave: "DMF3", title: CONFIG.SPECIAL_WAVES.DMF3, special: true, rows: [] }; plan.push(w); }
+    w.rows.push(...pr.map(r => ({ ...r, van: r.van || "EDV OVER" })));
+  }
+  plan.forEach(w => w.rows.forEach(r => { r.driver = clean(r.driver); r.forced = rowStatus(r)[0] === "forced"; }));
+  return plan;
+}
+function ctx() {
+  const [y, m, d] = ($("in-date").value || todayISO()).split("-").map(Number);
+  const lead = clean($("in-lead").value);
+  return { day: new Date(y, m - 1, d), lead: lead && lead.toUpperCase() !== "NONE" ? lead : "", notes: S.notes, extras: extrasList(), usable: S.usable, unusable: S.unusable };
+}
+function fileBase() { return `AMLO_Dispatch_RTS_${$("in-date").value || todayISO()}`; }
+async function saveFile(filename, blob) {
+  const api = window.claude && window.claude.use ? await window.claude.use("downloads") : null;
+  if (api) {
+    try { await api.save({ filename, data: blob }); flash2(`Saved ${filename}`); }
+    catch (e) { if (e && e.code === "declined") flash2("Download cancelled."); else flash(`Couldn't save the file (${e && e.code || "error"}).`); }
+    return;
+  }
+  if (window.claude && window.claude.use) { flash("This shared view can't save files for your account. Ask Sebastian for the AMLO Dispatch web link or the offline file."); return; }
+  const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000); flash2(`Saved ${filename}`);
+}
+function flash2(t) { const m = $("act-stat"); m.textContent = t; m.style.color = "var(--ok)"; clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => { m.style.color = ""; updateCounts(); }, 4000); }
+function blockers() { return problems().filter(p => p[0] === "bad" && /twice/.test(p[1])); }
+$("btn-pdf").addEventListener("click", async () => {
+  if (blockers().length) { flash(blockers()[0][1] + " — fix it before printing."); return; }
+  try { await saveFile(fileBase() + ".pdf", buildPdf(finalPlan(), ctx())); } catch (e) { console.error(e); flash("Couldn't build the PDF: " + e.message); }
+});
+$("btn-xlsx").addEventListener("click", async () => {
+  if (blockers().length) { flash(blockers()[0][1] + " — fix it before saving."); return; }
+  try { await saveFile(fileBase() + ".xlsx", buildXlsx(finalPlan(), ctx())); } catch (e) { console.error(e); flash("Couldn't build the Excel: " + e.message); }
+});
+
+/* ---------- example data (invented names) ---------- */
+$("btn-example").addEventListener("click", () => {
+  const first = ["Alex", "Bianca", "Carlos", "Dana", "Eli", "Fatima", "Gabe", "Hana", "Ivan", "Jade", "Kofi", "Lena", "Marco", "Nia", "Omar", "Paula", "Quinn", "Rosa", "Sam", "Tara", "Uriel", "Vera"];
+  const last = ["Ramos", "Hill", "Duarte", "Okafor", "Silva", "Nguyen", "Pierre", "Moreno", "Baptiste", "Cruz", "Lopez"];
+  const routes = first.map((f, i) => ({ route: "CX" + (i + 1), wave: i < 12 ? "10:40 AM" : "11:05 AM",
+    service_type: i === 17 ? "Standard Parcel - On-Road Experience: Driver" : i === 9 ? "Nursery Route Level 1 - Electric Vehicle" : "Standard Parcel Electric - Rivian MEDIUM",
+    staging: (i < 12 ? "B." : "C.") + (9 + (i % 12)), dur: 400 + (i * 37) % 135, driver: `${f} ${last[i % last.length]}` }));
+  const usable = [], unusable = [];
+  for (let n = 1; n <= 26; n++) { const v = { name: "EDV " + String(n).padStart(2, "0"), service_type: "Standard Parcel Electric - Rivian MEDIUM", status: "ACTIVE", ops: "OPERATIONAL", ownership: "AMAZON_OWNED" };
+    (n === 8 || n === 13 ? unusable : usable).push(n === 8 || n === 13 ? { ...v, ops: "GROUNDED" } : v); }
+  usable.push({ name: "AMLO 07", service_type: "Standard Parcel - Large Van", status: "ACTIVE", ops: "OPERATIONAL", ownership: "DSP_OWNED" });
+  for (let n = 1; n <= 3; n++) usable.push({ name: "RENTAL 0" + n, service_type: "Standard Parcel - Extra Large Van - US", status: "ACTIVE", ops: "OPERATIONAL", ownership: "RENTAL" });
+  S.example = true; S.problem = null;
+  start(routes.map(r => r), { usable, unusable });
+  $("f-routes").textContent = "Example routes loaded"; $("f-veh").textContent = "Example vans loaded";
+});
+
+</script>
+</body></html>
