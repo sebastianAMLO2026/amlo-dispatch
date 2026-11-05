@@ -622,8 +622,8 @@ function buildPdf(plan, ctx) {
   const dateStr = `${String(day.getMonth() + 1).padStart(2, "0")}/${String(day.getDate()).padStart(2, "0")}/${day.getFullYear()}`;
 
   /* ---------- Dispatch Sheet ---------- */
-  const widths = [70, 55, 62, 160, 80, 42, 65]; const totalW = widths.reduce((a, b) => a + b, 0);
-  const x0 = (W - totalW) / 2; const lw = widths[0] + widths[1] + 30;
+  const widths = [62, 50, 58, 150, 70, 58, 40, 56]; const totalW = widths.reduce((a, b) => a + b, 0);
+  const x0 = (W - totalW) / 2; const lw = widths[0] + widths[1] + 42;
   const phoneRows = plan.flatMap(w => w.rows).filter(r => r.phone > 0);
   const phoneTotal = phoneRows.reduce((a, r) => a + r.phone, 0);
   const phoneText = phoneRows.map(r => `${r.driver || r.route} (${r.phone})`).join(", ");
@@ -646,7 +646,7 @@ function buildPdf(plan, ctx) {
   pdf.text(cx, y - 36, `DATE: ${dateStr}   |   LEAD DRIVER: ${lead || "______________________"}`, { bold: true, size: 9, align: "c" });
   y -= 62;
   const need = sp => { if (y - sp < M) { pdf.addPage(); y = H - M; } };
-  const heads = ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "MGS", "EX PHONE"];
+  const heads = ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "EXP. RETURN", "MGS", "EX PHONE"];
   for (const w of plan) {
     need(rh * 3);
     cell(x0, y - rh, totalW, rh, "  " + w.title, { bold: true, size: fs + 0.5, align: "l", bg: NAVY, fg: "#FFFFFF", border: false }); y -= rh;
@@ -654,7 +654,7 @@ function buildPdf(plan, ctx) {
     head();
     for (const r of w.rows) {
       if (y - rh < M) { pdf.addPage(); y = H - M; head(); }
-      const vals = [r.van, r.route, r.time || r.wave, r.driver, r.staging, r.mgs ? "X" : "NONE", r.phone || ""];
+      const vals = [r.van, r.route, r.time || r.wave, r.driver, r.staging, r.exp || "", r.mgs ? "X" : "NONE", r.phone || ""];
       let x = x0;
       vals.forEach((v, i) => { const red = /OVER/.test(String(v)) || (i === 0 && r.forced);
         cell(x, y - rh, widths[i], rh, v, { bold: red, size: fs, align: i === 3 ? "l" : "c", fg: red ? RED : "#000000" }); x += widths[i]; });
@@ -880,9 +880,9 @@ function buildXlsx(plan, ctx) {
   const drivers = [...new Set(rows.map(x => x.driver).filter(Boolean))].sort();
 
   /* ---- Dispatch ---- */
-  "ABCDEFG".split("").forEach((c, i) => d.width(c, [14, 12, 12, 30, 16, 8, 12][i]));
+  "ABCDEFGH".split("").forEach((c, i) => d.width(c, [13, 11, 11, 28, 14, 12, 7, 11][i]));
   d.logo = true; d.merge("A1:B2");
-  d.merge("C1:G1"); d.set("C1", "AMLO LOGISTICS LLC - DISPATCH SHEET", { font: font(14, true, "1F2A6B"), align: C });
+  d.merge("C1:H1"); d.set("C1", "AMLO LOGISTICS LLC - DISPATCH SHEET", { font: font(14, true, "1F2A6B"), align: C });
   d.merge("C2:D2"); d.set("C2", `DATE: ${String(day.getMonth() + 1).padStart(2, "0")}/${String(day.getDate()).padStart(2, "0")}/${day.getFullYear()}  |  LEAD DRIVER:`, { font: font(9, true), align: { h: "right" } });
   d.set("E2", lead || "NONE", { font: font(9, true), align: L });
   d.list("E2", '"' + ["NONE", ...CONFIG.LEAD_DRIVERS].join(",") + '"');
@@ -890,17 +890,17 @@ function buildXlsx(plan, ctx) {
   let row = 4; const links = []; let first = null;
   const vanCells = [], xCells = [], phoneCells = [];
   for (const w of plan) {
-    d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(9.5, true, "FFFFFF") });
+    d.merge(`A${row}:H${row}`); d.styleRange(`A${row}:H${row}`, { fill: NAVY, font: font(9.5, true, "FFFFFF") });
     d.set(`A${row}`, "  " + w.title, { fill: NAVY, font: font(9.5, true, "FFFFFF") }); row++;
-    ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "MGS", "EX PHONE"].forEach((h, i) =>
+    ["VAN #", "ROUTE", "TIME", "DRIVER NAME", "STG LOCATION", "EXP. RETURN", "MGS", "EX PHONE"].forEach((h, i) =>
       d.set(colLetter(i) + row, h, { font: font(9, true), fill: GREY, align: C, border: "box" })); row++;
     if (w.special) links.push({ title: w.title });
     for (const x of w.rows) {
       first = first || row;
-      const vals = [x.van, x.route, x.time || x.wave, x.driver, x.staging, x.mgs ? "X" : "NONE", x.phone || "NONE"];
+      const vals = [x.van, x.route, x.time || x.wave, x.driver, x.staging, x.exp || "", x.mgs ? "X" : "NONE", x.phone || "NONE"];
       vals.forEach((v, i) => { const red = /OVER/.test(String(v)) || (i === 0 && x.forced);
         d.set(colLetter(i) + row, v, { font: font(9, red, red ? "C00000" : "000000"), align: i === 3 ? L : C, border: "box" }); });
-      vanCells.push("A" + row); xCells.push("F" + row); phoneCells.push("G" + row);
+      vanCells.push("A" + row); xCells.push("G" + row); phoneCells.push("H" + row);
       links.push({ row, x }); row++;
     }
     row++;
@@ -909,34 +909,34 @@ function buildXlsx(plan, ctx) {
   d.list(vanCells.join(" "), `'Fleet Status'!$H$2:$H$${allVans.length + 1}`);
   d.list(xCells.join(" "), '"X,NONE"');
   d.list(phoneCells.join(" "), '"' + ["NONE", ...Array.from({ length: CONFIG.MAX_EXTRA_PHONES }, (_, i) => i + 1)].join(",") + '"');
-  const rngG = `G${first}:G${last}`, rngD = `D${first}:D${last}`;
-  d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: "F3F4F6", font: font(9, true) });
+  const rngG = `G${first}:H${last}`, rngD = `D${first}:D${last}`;
+  d.merge(`A${row}:H${row}`); d.styleRange(`A${row}:H${row}`, { fill: "F3F4F6", font: font(9, true) });
   d.formula(`A${row}`, `="  DRIVERS WITH EXTRA PHONE  (TOTAL EXTRA PHONES: "&SUM(IFERROR(--${rngG},0))&")"`, { fill: "F3F4F6", font: font(9, true) }, true);
   row++;
-  d.merge(`A${row}:G${row + 1}`); d.styleRange(`A${row}:G${row + 1}`, { border: "box", font: font(10, true, BLUE), align: { h: "left", wrap: true } });
+  d.merge(`A${row}:H${row + 1}`); d.styleRange(`A${row}:H${row + 1}`, { border: "box", font: font(10, true, BLUE), align: { h: "left", wrap: true } });
   d.formula(`A${row}`, `=_xlfn.TEXTJOIN(", ",TRUE,IF(IFERROR(--${rngG},0)>0,${rngD}&" ("&${rngG}&")",""))`, { border: "box", font: font(10, true, BLUE), align: { h: "left", wrap: true } }, true);
   const phoneCell = `A${row}`; row += 3;
-  d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
+  d.merge(`A${row}:H${row}`); d.styleRange(`A${row}:H${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
   d.set(`A${row}`, "  DISPATCH OPERATIONAL NOTES & OBSERVATIONS", { fill: NAVY, font: font(10, true, "FFFFFF") }); d.height(row, 20); row++;
   for (const cat of CONFIG.NOTE_CATEGORIES) {
-    d.merge(`A${row}:B${row}`); d.merge(`C${row}:G${row}`);
+    d.merge(`A${row}:B${row}`); d.merge(`C${row}:H${row}`);
     d.styleRange(`A${row}:B${row}`, { fill: "F0F0F0", border: "light", font: font(8.5, true), align: { h: "left", wrap: true } });
-    d.styleRange(`C${row}:G${row}`, { border: "light", font: font(9, false, BLUE), align: { h: "left", wrap: true } });
+    d.styleRange(`C${row}:H${row}`, { border: "light", font: font(9, false, BLUE), align: { h: "left", wrap: true } });
     d.set(`A${row}`, cat); const txt = notes[cat] || ""; d.set(`C${row}`, txt);
     const lines = txt ? txt.split("\n").reduce((a, p) => a + Math.max(1, Math.ceil(p.length / 70)), 0) : 1;
     d.height(row, Math.max(24, 13 * lines + 6)); row++;
   }
   if (extras.length) {
-    row++; d.merge(`A${row}:G${row}`); d.styleRange(`A${row}:G${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
+    row++; d.merge(`A${row}:H${row}`); d.styleRange(`A${row}:H${row}`, { fill: NAVY, font: font(10, true, "FFFFFF") });
     d.set(`A${row}`, `  EXTRA PEOPLE TODAY (${extras.length})`); d.height(row, 20); row++;
     for (let i = 0; i < extras.length; i += 2) {
-      d.merge(`A${row}:C${row}`); d.merge(`D${row}:G${row}`);
-      d.styleRange(`A${row}:G${row}`, { border: "light", font: font(9, true, BLUE), align: L });
+      d.merge(`A${row}:C${row}`); d.merge(`D${row}:H${row}`);
+      d.styleRange(`A${row}:H${row}`, { border: "light", font: font(9, true, BLUE), align: L });
       d.set(`A${row}`, `${i + 1}. ${extras[i]}`); if (i + 1 < extras.length) d.set(`D${row}`, `${i + 2}. ${extras[i + 1]}`);
       d.height(row, 18); row++;
     }
   }
-  d.printArea = `$A$1:$G$${row}`;
+  d.printArea = `$A$1:$H$${row}`;
 
   /* ---- RTS ---- */
   "ABCDEFGH".split("").forEach((c, i) => r.width(c, [12.8, 10.8, 26, 12, 10, 7, 3, 28][i]));
@@ -950,9 +950,9 @@ function buildXlsx(plan, ctx) {
       r.formula(`A${rr}`, `=${ref}A${l.row}`, { font: font(9, true), align: C, border: "box" });
       r.formula(`B${rr}`, `=${ref}B${l.row}`, { font: font(9), align: C, border: "box" });
       r.formula(`C${rr}`, `=${ref}D${l.row}`, { font: font(9), align: L, border: "box" });
-      r.set(`D${rr}`, l.x.exp || "", { font: font(9), align: C, border: "box" });
+      r.formula(`D${rr}`, `=${ref}F${l.row}&""`, { font: font(9), align: C, border: "box" });
       r.set(`E${rr}`, "", { font: font(9), align: C, border: "box" });
-      r.formula(`F${rr}`, `=IF(${ref}F${l.row}="X","✓","")`, { font: font(9), align: C, border: "box" });
+      r.formula(`F${rr}`, `=IF(${ref}G${l.row}="X","✓","")`, { font: font(9), align: C, border: "box" });
     }
     r.height(rr, 18); rr++;
   }
